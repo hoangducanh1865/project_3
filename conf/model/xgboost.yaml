@@ -1,0 +1,6 @@
+# XGBoost đa lớp, điểm OOD = 1 - xác suất lớn nhất.
+name: xgboost
+kind: xgboost
+n_estimators: 200
+max_depth: 6
+lr: 0.1

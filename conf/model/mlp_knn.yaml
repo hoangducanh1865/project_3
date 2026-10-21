@@ -1,0 +1,11 @@
+# MLP softmax, điểm OOD = khoảng cách tới láng giềng thứ k trong lớp dự đoán, theo [13].
+name: mlp_knn
+kind: mlp
+score: knn
+hidden: [256, 256]
+dropout: 0.1
+lr: 1.0e-3
+epochs: 5
+batch_size: 2048
+k: 25
+index_per_class: 20000

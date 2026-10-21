@@ -218,3 +218,32 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# ---- project_3: chỉ đẩy mã và ghi chép, không đẩy dữ liệu cá nhân hay tài liệu bên thứ ba ----
+.DS_Store
+~$*
+.ipynb_checkpoints/
+outputs/
+multirun/
+third_party/
+
+# kết quả chạy (ghi ra Google Drive)
+/data/
+*.npz
+
+# chat với agent và tài liệu tham khảo
+/agents/claude/chat_history/
+/references/
+
+# dữ liệu mẫu: chỉ giữ README và script lấy mẫu
+/datasets/*
+!/datasets/README.md
+!/datasets/fetch_samples.py
+
+# file báo cáo và script sinh báo cáo (chứa số điện thoại, email; cần template trong references/)
+/my_information.txt
+/week_*/
+/.de_cuong_generator/
+bao_cao*.md
+results.csv

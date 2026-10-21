@@ -1,0 +1,13 @@
+# CLAD [16]. Kiến trúc và hàm mất mát của repo gốc; ngân sách huấn luyện nhỏ hơn
+# (gốc: 200 vòng, lr 4.4e-6) nên lr được tăng.
+name: clad
+kind: clad
+neurons: [1024, 1024, 1024, 1024]
+d_out: 8
+dropout: 0.0
+margin: 1.0
+lr: 1.0e-4
+weight_decay: 3.0e-7
+batch_size: 4096
+epochs: 10
+steps_per_epoch: 100

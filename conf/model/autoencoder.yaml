@@ -1,0 +1,8 @@
+# Autoencoder huấn luyện trên lưu lượng bình thường, điểm OOD = sai số tái tạo.
+name: autoencoder
+kind: autoencoder
+hidden: [64, 32]
+lr: 1.0e-3
+epochs: 5
+batch_size: 2048
+max_train: 500000

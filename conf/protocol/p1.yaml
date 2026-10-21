@@ -1,0 +1,4 @@
+# P1: loại trọn một họ tấn công khỏi tập huấn luyện. Họ đó là OOD khi kiểm thử.
+# heldout khớp không phân biệt hoa thường với một phần tên lớp (vd: slowloris, portscan).
+name: p1
+heldout: ???

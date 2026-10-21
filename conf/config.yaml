@@ -1,0 +1,22 @@
+# Cấu hình thực nghiệm baseline OOD (Hydra). Chạy từ thư mục gốc repo:
+#   python -m src.run protocol=p0 model=mlp_msp
+#   python -m src.run -m protocol=p1 protocol.heldout=slowloris,portscan model=mlp_msp,xgboost
+defaults:
+  - dataset: lycos
+  - protocol: p1
+  - model: mlp_msp
+  - _self_
+
+seed: 0
+device: auto      # auto | cuda | cpu
+eval_cap: 50000   # số mẫu tối đa dùng để đo: known-test, val và OOD
+
+# Kết quả ghi ra Google Drive (đặt OUT_ROOT), không ghi vào repo.
+out_root: ${oc.env:OUT_ROOT,outputs}
+
+hydra:
+  run:
+    dir: ${out_root}/runs/${protocol.name}_${model.name}_${now:%Y%m%d_%H%M%S}
+  sweep:
+    dir: ${out_root}/multirun/${now:%Y%m%d_%H%M%S}
+    subdir: ${hydra.job.num}

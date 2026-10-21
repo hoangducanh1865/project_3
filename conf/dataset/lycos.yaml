@@ -1,0 +1,9 @@
+# LYCOS-IDS2017, tập dữ liệu dùng trong [16]. Tải: xem notebooks/week_4_baseline.ipynb.
+name: lycos2017
+path: ${oc.env:LYCOS_CSV,data/lycos.csv}
+cache: ${oc.env:CACHE_DIR,/tmp}/lycos_cache.npz
+label_col: label
+benign: benign
+drop_cols: [flow_id, src_addr, src_port, dst_addr, dst_port, ip_prot, timestamp]
+rare_threshold: 100    # lớp ít hơn ngưỡng này là "zero-day" ở P0, giống [16]
+max_per_class: 100000  # giới hạn số mẫu huấn luyện mỗi lớp

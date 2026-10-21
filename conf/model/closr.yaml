@@ -1,0 +1,13 @@
+# CLOSR [16]. Kiến trúc và hàm mất mát của repo gốc; ngân sách huấn luyện nhỏ hơn
+# (gốc: 200 vòng, lr 1e-5) nên lr được tăng.
+name: closr
+kind: closr
+neurons: [1024, 1024, 1024]
+d_out: 64
+dropout: 0.1
+margin: 1.0
+lr: 1.0e-4
+weight_decay: 0.0403709
+batch_size: 4096
+epochs: 10
+steps_per_epoch: 100

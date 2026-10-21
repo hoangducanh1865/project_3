@@ -1,0 +1,9 @@
+# MLP softmax, điểm OOD = 1 - xác suất lớn nhất (MSP).
+name: mlp_msp
+kind: mlp
+score: msp
+hidden: [256, 256]
+dropout: 0.1
+lr: 1.0e-3
+epochs: 5
+batch_size: 2048

@@ -1,0 +1,3 @@
+# P0: chia ngẫu nhiên như [16]. OOD là các lớp hiếm (dưới rare_threshold mẫu).
+name: p0
+heldout: null
