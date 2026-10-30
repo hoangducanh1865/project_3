@@ -43,7 +43,7 @@ def likelihood(score, val_scores):
 
 def respond(tier, tactic, L, impact):
     """Một cảnh báo -> mức ứng phó và danh sách biện pháp."""
-    tac = tactic if tier < 3 else "unknown"
+    tac = str(tactic) if tier < 3 else "unknown"
     I = int(impact.get(tac, impact["unknown"]))
     R = int(L) * I
     _, level, action, reversible = next(lv for lv in LEVELS if R <= lv[0])

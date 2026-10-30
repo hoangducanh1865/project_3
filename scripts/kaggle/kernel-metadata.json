@@ -1,0 +1,15 @@
+{
+  "id": "hoangducanh18650/project3-hc-closr",
+  "title": "project3-hc-closr",
+  "code_file": "run_hc_closr.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "machine_shape": "NvidiaTeslaT4",
+  "dataset_sources": ["hoangducanh18650/project3-lycos-ids2017"],
+  "competition_sources": [],
+  "kernel_sources": [],
+  "model_sources": []
+}
