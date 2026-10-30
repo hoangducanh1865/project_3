@@ -16,7 +16,7 @@ out_root: ${oc.env:OUT_ROOT,outputs}
 
 hydra:
   run:
-    dir: ${out_root}/runs/${protocol.name}_${model.name}_${now:%Y%m%d_%H%M%S}
+    dir: ${out_root}/runs/${protocol.name}_${protocol.heldout}_${model.name}_${now:%Y%m%d_%H%M%S}
   sweep:
     dir: ${out_root}/multirun/${now:%Y%m%d_%H%M%S}
     subdir: ${hydra.job.num}_${protocol.name}_${model.name}_${protocol.heldout}   # có tên để hai sweep cùng giây không ghi đè nhau
