@@ -11,7 +11,9 @@
 - Quy trình: viết mã trên laptop → `git push` → notebook Colab `pull` và chạy → kết quả ghi lên Google Drive (`OUT_ROOT`), không vào repo. **Không chạy huấn luyện trên laptop** (người dùng đã yêu cầu dừng vì máy lag; chỉ chạy thử rất nhỏ, `nice`, 1 luồng).
 - Tracked: `conf/` (Hydra: `dataset/`, `protocol/`, `model/`), `src/` (`data`, `models`, `metrics`, `run`, `report`), `notebooks/week_4_baseline.ipynb`, `datasets/README.md` + `fetch_samples.py`, `agents/claude/{README,knowledge}.md`, `CLAUDE.md`, `README.md`, `requirements.txt`.
 - Chỉ có trên máy (gitignore): `week_1/` (đã nộp, KHÔNG sửa), `week_2/` (slide + docx tuần 2, script sinh `week_2/.generator/`), `.de_cuong_generator/`, `references/` (papers, `Security*.pdf`, template `ref/pda/`), `datasets/*` dữ liệu mẫu, `my_information.txt`, `agents/claude/chat_history/`.
-- SSH vào Colab: `notebooks/colab.ipynb` (mã trên Drive, ô cuối chạy `scripts/colab_ssh.sh`, in `ssh xxx.trycloudflare.com`); máy đã có `cloudflared` và mục `*.trycloudflare.com` trong `~/.ssh/config`.
+- **Nơi lưu (người dùng chốt 2026-10-30):** mã ở GitHub và Drive `MyDrive/hust/study_at_hust/semesters/20261/code/project_3`; dữ liệu và mọi kết quả ở Drive `.../20261/data/project_3` (dữ liệu trong `datasets/`, kết quả đặt thẳng ở gốc, **không** có thư mục `outputs`). Dữ liệu cũng đẩy lên HF dataset **private** `hoangducanh1865/project_3-data` (`HF_WRITE_TOKEN`) và Kaggle Dataset private `hoangducanh18650/project3-lycos-ids2017`.
+- SSH vào Colab: `notebooks/colab.ipynb` (ô cuối chạy `scripts/colab_ssh.sh`, in `ssh xxx.trycloudflare.com`); máy đã có `cloudflared` và mục `*.trycloudflare.com` trong `~/.ssh/config`. Không có Kaggle CLI trên laptop: dùng trên Colab (`pip install kaggle`, `KAGGLE_API_TOKEN=$KAGGLE_ACCESS_TOKEN_0`). Token trong `.env` (gitignore) — gửi sang Colab qua stdin vào `/root/.secrets`, không in ra.
+- Kaggle (2×T4, chạy nền): `kaggle kernels push -p scripts/kaggle` (kernel script, sửa `JOBS`), lấy kết quả `kaggle kernels output <user>/<slug> -p <dir>`.
 - `week_2/.generator/build_week2.py` sinh slide; docx tuần 2 là bản sao của file week_1 rồi sửa tại chỗ bằng `build_week2_docs.py` (không chạy lại trên file đã sửa).
 - Mã của [16] không vendoring: notebook clone vào `third_party/CLOSR` (gitignore), biến `CLOSR_DIR`.
 
@@ -43,9 +45,11 @@
 - Dataset: CIC-IDS2017/2018 có lỗi (Engelen: >20% traffic sửa/gán lại) → dùng bản sửa; NetFlow v3 (UQ) cần đăng nhập kho `rdm.uq.edu.au`; mẫu đã tải ở `datasets/`.
 - ATT&CK/D3FEND: ID kỹ thuật T1498, T1499, T1046, T1110, T1190, T1071, T1595, T1021 đã xác minh trên attack.mitre.org; API `d3fend.mitre.org/api/offensive-technique/attack/<ID>.json` trả danh sách biện pháp phòng thủ (T1046 trả rỗng).
 
-## 6. Việc đang dở (tuần 4)
-- Notebook `notebooks/week_4_baseline.ipynb` đã viết, **chưa chạy trên Colab/dữ liệu thật**. Đã chạy thử pipeline trên dữ liệu giả nhỏ (CPU): 6/7 mô hình chạy; **XGBoost chưa thử** (máy thiếu libomp). Đã sửa 2 lỗi bắt được khi thử (cache nhãn object, `torch.flatnonzero`). Nhãn LYCOS thật chưa biết tên chính xác → `HELDOUT` trong notebook có thể phải chỉnh.
-- Cần người dùng: chạy notebook, gửi `bao_cao_tuan4.md`; sau đó viết báo cáo tuần 4.
+## 6. Việc đang dở (tuần 4, cập nhật 2026-10-30)
+- Phiên Colab Pro ngày 30/10 chỉ có **1×T4** (không phải 2), RAM 50 GB.
+- Đã chạy lại toàn bộ baseline P0/P1 (heldout slowloris, ssh, bot, portscan) và tái hiện [16] bằng trọng số gốc (cần `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1` vì PyTorch ≥ 2.6). Lần chạy 21/10 bị trộn lần chạy thử vào báo cáo (2 dòng mlp_msp ở P0): đã tách.
+- **HC-CLOSR** (phương pháp đề xuất, slide tuần 2 mục 2.3–4.2) đã có mã: `build_hc_closr` trong `src/models.py`, `src/response.py`, `conf/model/hc_closr.yaml`, bảng chiến thuật trong `conf/dataset/lycos.yaml`. Các quy tắc tự thiết kế: tầng 2 cần chiến thuật dự đoán khác benign; L từ phân vị điểm OOD so với val (chưa dùng tần suất cảnh báo); I theo chiến thuật (giả định).
+- Cần: viết báo cáo tuần 4 từ `bao_cao_tuan4.md` ở `data/project_3`.
 
 (Cũ) 
 Xem `agents/claude/chat_history/week_2_lam_ro_huong_di/task.md`. Tuần 3 dự kiến: tải LYCOS-IDS2017, chạy lại mã [16], lập ánh xạ họ tấn công → ATT&CK → D3FEND.
