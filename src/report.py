@@ -10,6 +10,11 @@ METRICS = ["auroc", "fpr95", "det_rate", "fpr_thr", "acc", "macro_f1", "fit_seco
 NAMES = {"auroc": "AUROC", "fpr95": "FPR95", "det_rate": "Tỉ lệ phát hiện OOD", "fpr_thr": "FPR tại ngưỡng",
          "acc": "Acc", "macro_f1": "Macro-F1", "fit_seconds": "Thời gian huấn luyện (s)"}
 
+HC = {"auroc": "AUROC hợp nhất", "auroc_closr_only": "AUROC chỉ CLOSR", "auroc_knn_only": "AUROC chỉ KNN",
+      "auroc_tactic_level": "AUROC mức chiến thuật", "tier1_known": "Known xếp tầng 1",
+      "ood_tier1": "OOD tầng 1", "ood_tier2": "OOD tầng 2", "ood_tier3": "OOD tầng 3",
+      "ood_tier_acc": "OOD đúng tầng", "ood_tactic_acc_tier2": "Đúng chiến thuật (tầng 2)"}
+
 
 def load(root):
     rows = []
@@ -33,6 +38,12 @@ def build(df):
         out += [f"## {proto.upper()} – OOD: {ood}", ""]
         t = g.set_index("model")[[m for m in METRICS if m in g]].rename(columns=NAMES)
         out += [t.round(4).to_markdown(), ""]
+    hc = [c for c in HC if c in df]
+    if "auroc_knn_only" in df:
+        g = df.dropna(subset=["auroc_knn_only"]).set_index(["protocol", "heldout"])[hc].rename(columns=HC)
+        out += ["## HC-CLOSR: thành phần điểm, phân tầng và chiến thuật", "",
+                "Tầng đúng của OOD: 2 nếu chiến thuật thật còn trong tập huấn luyện (biến thể), ngược lại 3.", "",
+                g.round(4).to_markdown(), ""]
     p1 = df[df.protocol == "p1"]
     if len(p1):
         out += ["## P1: AUROC theo họ tấn công bị loại", "",
