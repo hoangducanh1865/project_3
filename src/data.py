@@ -82,5 +82,5 @@ def make_split(X, y, ds, proto, eval_cap, seed):
         "X_tr": z(tr), "y_tr": yk[tr],
         "X_va": z(va), "X_te": z(te), "y_te": yk[te], "X_ood": z(ood),
         "classes": [names[i] for i in known],
-        "ood_classes": [names[i] for i in ood_ids],
+        "ood_classes": [names[i] for i in ood_ids], "ood_names": names[inv[ood]],
     }

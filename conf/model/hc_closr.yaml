@@ -1,0 +1,27 @@
+# HC-CLOSR (phương pháp đề xuất, slide tuần 2 mục 2.3-2.4). Encoder CLOSR [16] thêm các đầu embedding theo
+# chiến thuật ATT&CK; mất mát tương phản ở cả hai tầng; điểm OOD = likelihood CLOSR + khoảng cách KNN [13].
+# Ngân sách huấn luyện giống conf/model/closr.yaml để so sánh công bằng.
+name: hc_closr
+kind: hc_closr
+neurons: [1024, 1024, 1024]
+d_out: 64
+dropout: 0.1
+margin: 1.0
+lr: 1.0e-4
+weight_decay: 0.0403709
+batch_size: 4096
+epochs: 10
+steps_per_epoch: 100
+tactic_weight: 1.0      # trọng số mất mát tầng chiến thuật
+k: 25                   # láng giềng thứ k cho điểm KNN, theo [13]
+index_per_class: 20000  # số embedding huấn luyện mỗi lớp giữ làm chỉ mục KNN
+quantile: 0.95          # ngưỡng OOD: phân vị của điểm trên dữ liệu known (val), không dùng dữ liệu OOD
+# Ứng phó (slide tuần 2 mục 4.1-4.2). Đây là quy tắc thiết kế, cần đối chiếu chuyên gia.
+# I: tác động theo chiến thuật (giả định, chưa có độ quan trọng tài sản trong dữ liệu); "unknown" dùng cho tầng 3.
+impact:
+  impact: 4
+  credential_access: 4
+  initial_access: 5
+  command_and_control: 5
+  discovery: 2
+  unknown: 4

@@ -7,3 +7,11 @@ benign: benign
 drop_cols: [flow_id, src_addr, src_port, dst_addr, dst_port, ip_prot, timestamp]
 rare_threshold: 100    # lớp ít hơn ngưỡng này là "zero-day" ở P0, giống [16]
 max_per_class: 100000  # giới hạn số mẫu huấn luyện mỗi lớp
+# Ánh xạ họ tấn công -> chiến thuật ATT&CK cho HC-CLOSR. Bảng do đề tài tự lập (slide tuần 2, mục 4.2), chưa đối chiếu chuyên gia.
+# Mỗi mục khớp không phân biệt hoa thường với một phần tên lớp; lớp bình thường là chiến thuật "benign".
+tactics:
+  impact: [dos, ddos]                      # T1498, T1499
+  credential_access: [patator, bruteforce] # T1110
+  initial_access: [sql, xss, heartbleed]   # T1190
+  command_and_control: [bot]               # T1071
+  discovery: [portscan]                    # T1046, T1595

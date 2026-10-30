@@ -46,6 +46,7 @@ def main(cfg):
         "fit_seconds": round(fit_s, 1),
         **detection_metrics(s_kn, s_ood, s_va),
         **(closed_metrics(sp["y_te"], pred) if pred is not None else {}),
+        **(scorer.extra(sp) if hasattr(scorer, "extra") else {}),
         "config": OmegaConf.to_container(cfg, resolve=True),
     }
     out = os.path.join(HydraConfig.get().runtime.output_dir, "result.json")
