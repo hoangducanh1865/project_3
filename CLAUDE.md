@@ -11,6 +11,7 @@
 - Quy trình: viết mã trên laptop → `git push` → notebook Colab `pull` và chạy → kết quả ghi lên Google Drive (`OUT_ROOT`), không vào repo. **Không chạy huấn luyện trên laptop** (người dùng đã yêu cầu dừng vì máy lag; chỉ chạy thử rất nhỏ, `nice`, 1 luồng).
 - Tracked: `conf/` (Hydra: `dataset/`, `protocol/`, `model/`), `src/` (`data`, `models`, `metrics`, `run`, `report`), `notebooks/week_4_baseline.ipynb`, `datasets/README.md` + `fetch_samples.py`, `agents/claude/{README,knowledge}.md`, `CLAUDE.md`, `README.md`, `requirements.txt`.
 - Chỉ có trên máy (gitignore): `week_1/` (đã nộp, KHÔNG sửa), `week_2/` (slide + docx tuần 2, script sinh `week_2/.generator/`), `.de_cuong_generator/`, `references/` (papers, `Security*.pdf`, template `ref/pda/`), `datasets/*` dữ liệu mẫu, `my_information.txt`, `agents/claude/chat_history/`.
+- SSH vào Colab: `notebooks/colab.ipynb` (mã trên Drive, ô cuối chạy `scripts/colab_ssh.sh`, in `ssh xxx.trycloudflare.com`); máy đã có `cloudflared` và mục `*.trycloudflare.com` trong `~/.ssh/config`.
 - `week_2/.generator/build_week2.py` sinh slide; docx tuần 2 là bản sao của file week_1 rồi sửa tại chỗ bằng `build_week2_docs.py` (không chạy lại trên file đã sửa).
 - Mã của [16] không vendoring: notebook clone vào `third_party/CLOSR` (gitignore), biến `CLOSR_DIR`.
 
