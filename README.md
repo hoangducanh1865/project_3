@@ -10,15 +10,16 @@ Viết mã trên laptop, `git push`, rồi notebook Colab chỉ `pull` và chạ
 
 | Thư mục | Nội dung |
 |---|---|
-| `conf/` | Cấu hình Hydra: `dataset/`, `protocol/` (P0, P1), `model/` (7 baseline) |
-| `src/` | `data.py` nạp và tách dữ liệu, `models.py` các baseline, `metrics.py`, `run.py` chạy một lần, `report.py` gom bảng |
-| `notebooks/` | Notebook Colab chạy thực nghiệm |
+| `conf/` | Cấu hình Hydra: `dataset/`, `protocol/` (P0, P1), `model/` (7 baseline và HC-CLOSR) |
+| `src/` | `data.py` nạp và tách dữ liệu, `models.py` các mô hình, `response.py` đề xuất biện pháp ứng phó, `metrics.py`, `run.py` chạy một lần, `report.py` gom bảng |
+| `notebooks/` | `baseline.ipynb` chạy thực nghiệm, `colab.ipynb` mở SSH vào phiên Colab |
+| `scripts/` | `colab_ssh.sh`, kernel Kaggle trong `kaggle/`, `recover_results.py` khôi phục kết quả từ log |
 | `datasets/` | Hướng dẫn và script lấy mẫu dữ liệu (không chứa dữ liệu) |
 | `agents/` | Ghi chép tri thức cho agent, xem `CLAUDE.md` |
 
 ## Chạy
 
-Cần GPU. Mở `notebooks/week_4_baseline.ipynb` trên Colab (T4), hoặc chạy từ thư mục gốc:
+Cần GPU. Mở `notebooks/baseline.ipynb` trên Colab (T4), hoặc chạy từ thư mục gốc:
 
 ```bash
 pip install -r requirements.txt
@@ -36,6 +37,8 @@ python -m src.report
 
 Baseline: MLP (điểm MSP), MLP + KNN theo [13], XGBoost, Isolation Forest, Autoencoder, CLAD, CLOSR. CLAD và CLOSR dùng mã gốc của [16] (Apache-2.0) với ngân sách huấn luyện nhỏ hơn bản gốc.
 
+Phương pháp đề xuất: `model=hc_closr` (HC-CLOSR), cùng ngân sách huấn luyện với CLOSR.
+
 ## Không có trong repo
 
-Dữ liệu, tài liệu tham khảo, báo cáo đã nộp và lịch sử chat với agent chỉ có trên máy cục bộ (xem `.gitignore`).
+Báo cáo các tuần (`reports/`), tài liệu tham khảo và lịch sử chat với agent chỉ có trên máy cục bộ (xem `.gitignore`). Dữ liệu và kết quả nằm trên Google Drive.

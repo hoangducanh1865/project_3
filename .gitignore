@@ -228,7 +228,7 @@ outputs/
 multirun/
 third_party/
 
-# kết quả chạy (ghi ra Google Drive)
+# dữ liệu và kết quả chạy (lưu trên Google Drive)
 /data/
 *.npz
 
@@ -241,9 +241,7 @@ third_party/
 !/datasets/README.md
 !/datasets/fetch_samples.py
 
-# file báo cáo và script sinh báo cáo (chứa số điện thoại, email; cần template trong references/)
-/my_information.txt
-/week_*/
-/.de_cuong_generator/
+# báo cáo các tuần và script sinh báo cáo (chứa số điện thoại, email; cần template trong references/)
+/reports/
 bao_cao*.md
 results.csv

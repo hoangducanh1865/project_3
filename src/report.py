@@ -27,7 +27,7 @@ def load(root):
 
 
 def build(df):
-    out = ["# Kết quả baseline tuần 4", "",
+    out = ["# Kết quả thực nghiệm", "",
            f"Số lần chạy: {len(df)}. Điểm cao hơn là bất thường hơn; OOD là lớp dương.",
            "FPR95: tỉ lệ known-test báo nhầm khi bắt được 95% OOD. Tỉ lệ phát hiện OOD và FPR tại ngưỡng: ngưỡng chọn "
            "từ phân vị 95 của dữ liệu known (val), không dùng dữ liệu OOD.", ""]
@@ -59,6 +59,6 @@ if __name__ == "__main__":
     if df.empty:
         raise SystemExit(f"không thấy result.json dưới {a.root}")
     md = build(df)
-    open(os.path.join(a.root, "bao_cao_tuan4.md"), "w").write(md)
+    open(os.path.join(a.root, "bao_cao_ket_qua.md"), "w").write(md)
     df.to_csv(os.path.join(a.root, "results.csv"), index=False)
     print(md)
