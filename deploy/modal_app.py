@@ -7,6 +7,7 @@ Chạy từ thư mục gốc repo, dùng hồ sơ Modal đang đăng nhập:
   modal volume put project3-model <thư mục> /hc_closr    # nạp HC-CLOSR đã huấn luyện (xem scripts/kaggle)
   PYTHONPATH=. modal deploy deploy/modal_app.py          # triển khai API
   PYTHONPATH=. modal run deploy/modal_app.py::evaluate --hours 72 --out replay.json   # đánh giá tăng tốc
+  PYTHONPATH=. modal run deploy/modal_app.py::telegram_test    # gửi một tin thử qua Telegram
 """
 import json
 import os
@@ -19,10 +20,16 @@ VOL = "/vol"
 MAX_FLOWS = 2000
 HELDOUT = "slowloris"   # họ tấn công bị giấu khi huấn luyện HC-CLOSR (scripts/kaggle/run_hc_closr.py)
 NAMES = {"hc_closr": "HC-CLOSR (đề xuất)", "closr": "CLOSR [16], trọng số gốc"}
+WEB_URL = "https://project3-ids.vercel.app"
+TIER = {1: "tấn công đã biết", 2: "biến thể của chiến thuật đã biết", 3: "hành vi hoàn toàn mới"}
+TACTIC = {"impact": "Impact", "credential_access": "Credential Access", "initial_access": "Initial Access",
+          "command_and_control": "Command and Control", "discovery": "Discovery", "unknown": "Chưa xác định"}
+MAX_NOTIFY = 3      # số tin tối đa mỗi phút, phần còn lại gửi ở lượt sau
 
 app = modal.App("project3-hc-closr")
 volume = modal.Volume.from_name("project3-model", create_if_missing=True)
 secret = modal.Secret.from_name("project3")
+telegram = modal.Secret.from_name("project3-telegram")
 store = modal.Dict.from_name("project3-live", create_if_missing=True)
 
 
@@ -96,15 +103,40 @@ def stream():
     print(prepare_stream.remote({k: conf[k] for k in keys}, json.loads((root / "deploy/scenarios.json").read_text())))
 
 
+def send_telegram(text):
+    """Gửi một tin qua Telegram. Trả về False nếu lỗi: báo tin không được làm hỏng lượt chạy, lượt sau gửi lại."""
+    import urllib.error
+    import urllib.request
+    url = f"https://api.telegram.org/bot{os.environ['TELEGRAM_BOT_TOKEN']}/sendMessage"
+    body = json.dumps({"chat_id": os.environ["TELEGRAM_CHAT_ID"], "text": text, "disable_web_page_preview": True})
+    req = urllib.request.Request(url, body.encode(), {"content-type": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=8) as res:
+            return res.status == 200
+    except (urllib.error.URLError, TimeoutError) as e:
+        print(f"lỗi gửi Telegram: {type(e).__name__}")   # không in URL vì có khoá
+        return False
+
+
+@app.function(image=serve_image, secrets=[telegram], timeout=30)
+def notify_test():
+    return send_telegram(f"Kênh cảnh báo đã kết nối (dữ liệu mô phỏng)\n{WEB_URL}")
+
+
+@app.local_entrypoint()
+def telegram_test():
+    print("gửi được" if notify_test.remote() else "không gửi được")
+
+
 @app.function(image=serve_image, cpu=1, memory=2048, scaledown_window=2, timeout=55, volumes={VOL: volume},
-              schedule=modal.Cron("* * * * *"))
+              secrets=[telegram], schedule=modal.Cron("* * * * *"))
 def tick():
     """Mỗi phút: sinh lưu lượng của một phút, chạy HC-CLOSR rồi cập nhật sự cố. Máy tắt ngay sau đó để tiết kiệm."""
     import numpy as np
     import torch
     from src.hc_detector import HCDetector
     from src.simulator import Simulator
-    from src.stream import step
+    from src.stream import message, step, to_notify
     torch.set_num_threads(1)
     t0 = time.time()
     minute = int(t0 // 60)
@@ -122,6 +154,10 @@ def tick():
         c = sim["active"]
         state["campaigns"].append({k: c[k] for k in ("id", "name", "narrative", "start", "scenario")})
     opened = step(state, flows, det.analyze(X), minute, det.info["impact"], ended)
+    for inc in to_notify(state["incidents"])[:MAX_NOTIFY]:
+        if not send_telegram(message(inc, TIER, TACTIC, WEB_URL)):
+            break
+        inc["notified"] = True
     for k, v in state.items():
         store[k] = v
     store["sim"] = sim

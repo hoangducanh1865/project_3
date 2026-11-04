@@ -47,6 +47,8 @@ Web tại https://project3-ids.vercel.app gọi API trên Modal qua route server
 
 Luồng giả lập chạy 24/7 trên Modal (`tick`, mỗi phút một lần): phát lại flow thật của LYCOS-IDS2017 chưa dùng để huấn luyện (`src/simulator.py`) theo kịch bản trong `deploy/scenarios.json` (Gemini soạn bằng `deploy/gen_scenarios.py`), chạy HC-CLOSR rồi gom cảnh báo thành sự cố (`src/stream.py`). Trình tự tấn công và IP là giả lập.
 
+Sự cố từ mức M3 được báo qua Telegram. Cần `TELEGRAM_BOT_TOKEN` và `TELEGRAM_CHAT_ID` trong `.env`, chạy `python deploy/setup_modal.py` để tạo secret `project3-telegram`, rồi thử bằng `PYTHONPATH=. modal run deploy/modal_app.py::telegram_test`.
+
 ```bash
 pip install modal pyyaml
 python deploy/setup_modal.py                          # tạo secret từ .env
