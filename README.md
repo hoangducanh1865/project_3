@@ -45,15 +45,18 @@ Phương pháp đề xuất: `model=hc_closr` (HC-CLOSR), cùng ngân sách hu�
 
 Web tại https://project3-ids.vercel.app gọi API trên Modal qua route server, khoá API không lộ ra trình duyệt.
 
+Luồng giả lập chạy 24/7 trên Modal (`tick`, mỗi phút một lần): phát lại flow thật của LYCOS-IDS2017 chưa dùng để huấn luyện (`src/simulator.py`) theo kịch bản trong `deploy/scenarios.json` (Gemini soạn bằng `deploy/gen_scenarios.py`), chạy HC-CLOSR rồi gom cảnh báo thành sự cố (`src/stream.py`). Trình tự tấn công và IP là giả lập.
+
 ```bash
 pip install modal pyyaml
 python deploy/setup_modal.py                          # tạo secret từ .env
-PYTHONPATH=. modal run deploy/modal_app.py            # dựng CLOSR [16] từ trọng số gốc
+PYTHONPATH=. modal run deploy/modal_app.py::main      # dựng CLOSR [16] từ trọng số gốc
+PYTHONPATH=. modal run deploy/modal_app.py::stream    # dựng kho flow và nạp kịch bản cho luồng giả lập
 modal volume put project3-model <thư mục> /hc_closr   # nạp HC-CLOSR, thư mục do scripts/kaggle xuất ra
 PYTHONPATH=. modal deploy deploy/modal_app.py         # triển khai API
 ```
 
-Web cần hai biến môi trường trên Vercel: `MODAL_API_URL`, `MODAL_API_KEY`.
+Web cần ba biến môi trường trên Vercel: `MODAL_API_URL`, `MODAL_LIVE_URL`, `MODAL_API_KEY`.
 
 ## Không có trong repo
 

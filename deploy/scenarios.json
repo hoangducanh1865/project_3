@@ -1,0 +1,299 @@
+[
+ {
+  "id": "web_sqli_breach",
+  "name": "Khai thác SQL Injection và chiếm quyền điều khiển",
+  "narrative": "Kẻ tấn công dò quét cổng dịch vụ web, khai thác lỗ hổng SQL Injection để trích xuất cơ sở dữ liệu và kích hoạt botnet thu thập thông tin.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 5,
+    "flows_per_min": 40
+   },
+   {
+    "family": "webattack_sql_injection",
+    "minutes": 10,
+    "flows_per_min": 4
+   },
+   {
+    "family": "bot",
+    "minutes": 8,
+    "flows_per_min": 25
+   }
+  ]
+ },
+ {
+  "id": "heartbleed_ssh_lateral",
+  "name": "Khai thác Heartbleed và chiếm quyền SSH Bastion",
+  "narrative": "Kẻ tấn công đánh cắp chứng thực bộ nhớ máy chủ qua lỗ hổng Heartbleed, sau đó dò mật khẩu SSH bastion để thâm nhập hệ thống nội bộ.",
+  "phases": [
+   {
+    "family": "heartbleed",
+    "minutes": 8,
+    "flows_per_min": 4
+   },
+   {
+    "family": "ssh_patator",
+    "minutes": 12,
+    "flows_per_min": 45
+   },
+   {
+    "family": "bot",
+    "minutes": 10,
+    "flows_per_min": 20
+   }
+  ]
+ },
+ {
+  "id": "volumetric_ddos_flood",
+  "name": "Tấn công từ chối dịch vụ phân tán diện rộng",
+  "narrative": "Đối thủ phát động đợt tấn công DDoS dồn dập nhằm đánh sập hoàn toàn băng thông mạng và năng lực xử lý của doanh nghiệp.",
+  "phases": [
+   {
+    "family": "ddos",
+    "minutes": 15,
+    "flows_per_min": 140
+   }
+  ]
+ },
+ {
+  "id": "xss_defacement_hulk",
+  "name": "Tấn công XSS kết hợp DoS Hulk làm tê liệt cổng thông tin",
+  "narrative": "Kẻ tấn công thử nghiệm chèn mã độc XSS vào cổng web và lập tức xả tải bằng DoS Hulk để làm tê liệt dịch vụ ứng dụng.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 4,
+    "flows_per_min": 60
+   },
+   {
+    "family": "webattack_xss",
+    "minutes": 10,
+    "flows_per_min": 30
+   },
+   {
+    "family": "dos_hulk",
+    "minutes": 12,
+    "flows_per_min": 130
+   }
+  ]
+ },
+ {
+  "id": "ftp_compromise_recon",
+  "name": "Dò quét và chiếm đoạt máy chủ FTP",
+  "narrative": "Tin tặc quét cổng xác định dịch vụ FTP, thực hiện bẻ khóa mật khẩu Patator và triển khai bot để duy trì kết nối.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 3,
+    "flows_per_min": 80
+   },
+   {
+    "family": "ftp_patator",
+    "minutes": 15,
+    "flows_per_min": 95
+   },
+   {
+    "family": "bot",
+    "minutes": 10,
+    "flows_per_min": 35
+   }
+  ]
+ },
+ {
+  "id": "slow_stealth_dos_slowloris",
+  "name": "Tấn công từ chối dịch vụ âm thầm Slowloris",
+  "narrative": "Kẻ tấn công duy trì các kết nối HTTP nửa vời để cạn kiệt tài nguyên máy chủ web một cách kín đáo nhằm né tránh hệ thống cảnh báo.",
+  "phases": [
+   {
+    "family": "dos_slowloris",
+    "minutes": 15,
+    "flows_per_min": 40
+   },
+   {
+    "family": "dos_slowloris",
+    "minutes": 15,
+    "flows_per_min": 70
+   }
+  ]
+ },
+ {
+  "id": "slowhttptest_service_exhaustion",
+  "name": "Làm cạn kiệt tài nguyên máy chủ với SlowHTTPTest",
+  "narrative": "Tin tặc quét dịch vụ web rồi sử dụng SlowHTTPTest làm nghẽn hàng đợi xử lý của máy chủ web mục tiêu.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 4,
+    "flows_per_min": 50
+   },
+   {
+    "family": "dos_slowhttptest",
+    "minutes": 14,
+    "flows_per_min": 65
+   }
+  ]
+ },
+ {
+  "id": "web_credential_stuffing_goldeneye",
+  "name": "Dò mật khẩu web và xóa dấu vết bằng GoldenEye",
+  "narrative": "Kẻ tấn công dò quét mật khẩu người dùng web portal sau đó kích hoạt DoS GoldenEye để che giấu dấu vết xâm nhập.",
+  "phases": [
+   {
+    "family": "webattack_bruteforce",
+    "minutes": 12,
+    "flows_per_min": 45
+   },
+   {
+    "family": "dos_goldeneye",
+    "minutes": 10,
+    "flows_per_min": 110
+   }
+  ]
+ },
+ {
+  "id": "full_chain_bastion_compromise",
+  "name": "Chiến dịch thâm nhập chuỗi tấn công toàn diện",
+  "narrative": "Tin tặc quét mạng, tấn công vét cạn SSH bastion, dò tìm cơ sở dữ liệu qua SQLi và kích hoạt mạng botnet nội bộ.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 5,
+    "flows_per_min": 100
+   },
+   {
+    "family": "ssh_patator",
+    "minutes": 10,
+    "flows_per_min": 80
+   },
+   {
+    "family": "webattack_sql_injection",
+    "minutes": 8,
+    "flows_per_min": 3
+   },
+   {
+    "family": "bot",
+    "minutes": 12,
+    "flows_per_min": 40
+   }
+  ]
+ },
+ {
+  "id": "aggressive_ssh_patator",
+  "name": "Vét cạn mật khẩu SSH Bastion cường độ cao",
+  "narrative": "Kẻ tấn công sử dụng công cụ SSH Patator tốc độ cao nhằm nhanh chóng bẻ khóa tài khoản quản trị hệ thống.",
+  "phases": [
+   {
+    "family": "ssh_patator",
+    "minutes": 8,
+    "flows_per_min": 115
+   }
+  ]
+ },
+ {
+  "id": "multi_web_vector_probing",
+  "name": "Thăm dò đa lỗ hổng ứng dụng web kết hợp",
+  "narrative": "Tin tặc thực hiện chuỗi kiểm thử lỗ hổng XSS, SQLi và dò quét mật khẩu quản trị web nhằm tìm điểm yếu máy chủ.",
+  "phases": [
+   {
+    "family": "webattack_xss",
+    "minutes": 8,
+    "flows_per_min": 25
+   },
+   {
+    "family": "webattack_sql_injection",
+    "minutes": 7,
+    "flows_per_min": 4
+   },
+   {
+    "family": "webattack_bruteforce",
+    "minutes": 10,
+    "flows_per_min": 50
+   }
+  ]
+ },
+ {
+  "id": "botnet_c2_communication",
+  "name": "Thiết lập kênh liên lạc mã độc botnet nội bộ",
+  "narrative": "Mã độc trên máy trạm văn phòng khởi tạo và duy trì luồng kết nối C2 botnet để nhận lệnh điều khiển từ xa.",
+  "phases": [
+   {
+    "family": "bot",
+    "minutes": 15,
+    "flows_per_min": 30
+   },
+   {
+    "family": "bot",
+    "minutes": 15,
+    "flows_per_min": 55
+   }
+  ]
+ },
+ {
+  "id": "heartbleed_credential_bruteforce",
+  "name": "Đánh cắp khóa bảo mật Heartbleed và brute force trang web",
+  "narrative": "Kẻ tấn công khai thác lỗi Heartbleed lấy session token rồi thực hiện brute-force tài khoản quản trị web portal.",
+  "phases": [
+   {
+    "family": "heartbleed",
+    "minutes": 10,
+    "flows_per_min": 3
+   },
+   {
+    "family": "webattack_bruteforce",
+    "minutes": 14,
+    "flows_per_min": 40
+   }
+  ]
+ },
+ {
+  "id": "ftp_compromise_hulk_diversion",
+  "name": "Xâm nhập máy chủ FTP kết hợp DoS Hulk đánh lạc hướng",
+  "narrative": "Tin tặc vét cạn mật khẩu FTP để trộm dữ liệu, đồng thời phát động DoS Hulk làm sập web server đánh lạc hướng đội SOC.",
+  "phases": [
+   {
+    "family": "ftp_patator",
+    "minutes": 12,
+    "flows_per_min": 70
+   },
+   {
+    "family": "dos_hulk",
+    "minutes": 10,
+    "flows_per_min": 145
+   }
+  ]
+ },
+ {
+  "id": "noisy_port_sweep",
+  "name": "Quét cổng trinh sát diện rộng tốc độ cao",
+  "narrative": "Đối thủ quét toàn bộ dải cổng của mạng doanh nghiệp với tốc độ cao để lập bản đồ các dịch vụ đang mở.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 12,
+    "flows_per_min": 145
+   }
+  ]
+ },
+ {
+  "id": "recon_xss_goldeneye_disruption",
+  "name": "Trinh sát mạng, khai thác XSS và phá hoại bằng GoldenEye",
+  "narrative": "Tin tặc quét cổng xác định mục tiêu, thử nghiệm tấn công XSS và cuối cùng xả tải GoldenEye để hạ gục máy chủ web.",
+  "phases": [
+   {
+    "family": "portscan",
+    "minutes": 5,
+    "flows_per_min": 75
+   },
+   {
+    "family": "webattack_xss",
+    "minutes": 9,
+    "flows_per_min": 35
+   },
+   {
+    "family": "dos_goldeneye",
+    "minutes": 12,
+    "flows_per_min": 105
+   }
+  ]
+ }
+]
