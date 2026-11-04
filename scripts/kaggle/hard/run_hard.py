@@ -31,6 +31,13 @@ def p1(model):
     return [f"protocol=p0 model={model}"] + [f"protocol=pv protocol.heldout={h} model={model}" for h in HELD]
 
 
+def uwf(models):
+    runs = [f"dataset=uwf protocol=p2 protocol.target=uwf25 protocol.heldout=to25"]
+    runs += [f"dataset=uwf protocol=p1 protocol.heldout={t}" for t in ("t1018", "t1592", "t1595")]
+    runs += [f"dataset=uwf protocol=p1t protocol.heldout={t}" for t in ("discovery", "reconnaissance")]
+    return [f"{r} model={m}" for m in models for r in runs]
+
+
 FAST = {"xgboost": "model.n_estimators=5", "tabpfn": "model.max_train=300 model.n_estimators=1 eval_cap=500"}
 TINY = "model.epochs=1 model.steps_per_epoch=5 eval_cap=2000"
 
@@ -63,6 +70,11 @@ PARTS = {
         "b": (1, hard("closr")),
         "p2": (1, [f"{p} model={m}" for m in P2_MODELS[2:] for p in P2]),
     },
+    # UWF-ZeekData: giấu kỹ thuật, giấu chiến thuật, huấn luyện 2021-2024 và kiểm thử 2025
+    "uwf": {
+        "uwf": (0, uwf(["xgboost", "mlp_knn"])),
+        "uwf2": (1, uwf(["closr_knn", "hc_closr"])),
+    },
     # Đối chứng không có đầu chiến thuật, và embedding số ở P0, P1
     "ablation": {
         "a": (0, p1("closr_knn") + p1("mlp_ple_knn")),
@@ -87,14 +99,22 @@ csv = glob.glob("/kaggle/input/**/lycos.csv", recursive=True)[0]
 csv18 = f"{T}/lycos18.csv"
 
 
+ready = threading.Event()
+
+
 def stream(name, gpu, runs):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu), LYCOS_CSV=csv, LYCOS18_CSV=csv18,
-               CACHE_DIR=f"{T}/cache_{name}", OUT_ROOT=f"{W}/out", CLOSR_DIR=f"{T}/project_3/third_party/CLOSR",
+               UWF_DIR=f"{T}/uwf", CACHE_DIR=f"{T}/cache_{name}", OUT_ROOT=f"{W}/out", CLOSR_DIR=f"{T}/project_3/third_party/CLOSR",
                HYDRA_FULL_ERROR="1")
     os.makedirs(env["CACHE_DIR"], exist_ok=True)
     with open(f"{W}/{name}.log", "w") as log:
         if name == "p2" and not os.path.exists(csv18):
             subprocess.run(f"gdown {LYCOS18_ID} -O {csv18} && head -c 1500 {csv18}", shell=True, stdout=log, stderr=log)
+        if name == "uwf":
+            subprocess.run(f"python -m src.uwf {T}/uwf", shell=True, stdout=log, stderr=log)
+            ready.set()
+        elif name == "uwf2":
+            ready.wait()
         for r in runs:
             log.write(f"\n===== {r}\n"); log.flush()
             code = subprocess.run(f"python -m src.run {r}", shell=True, env=env, stdout=log, stderr=log).returncode

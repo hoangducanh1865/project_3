@@ -1,0 +1,19 @@
+# UWF-ZeekData 2021-2024 (src/uwf.py): nhãn kỹ thuật và chiến thuật ATT&CK do nhóm tác giả gán, không phải bảng tự lập.
+# Mỗi dòng trong tactics liệt kê các kỹ thuật có từ 100 flow của chiến thuật đó trong dữ liệu.
+name: uwf
+path: ${oc.env:UWF_DIR,data}/uwf.csv
+cache: ${oc.env:CACHE_DIR,/tmp}/uwf_cache.npz
+label_col: label
+benign: none
+drop_cols: [timestamp]
+rare_threshold: 100
+max_per_class: 100000
+tactics:
+  discovery: [t1046, t1018, t1016]
+  reconnaissance: [t1595, t1590, t1592, t1589]
+  resource_development: [t1587]
+  credential_access: [t1110]
+  initial_access: [t1190, t1078]
+  exfiltration: [t1048]
+  privilege_escalation: [t1548]
+  lateral_movement: [t1210]
