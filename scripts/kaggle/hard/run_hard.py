@@ -8,7 +8,7 @@ import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "key"   # smoke | screen | key | hc | uwf | ablation
+PART = "key"   # smoke | screen | key | hc | uwf | floor | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
@@ -79,6 +79,13 @@ PARTS = {
     "uwf": {
         "uwf": (0, uwf(["xgboost", "mlp_knn"])),
         "uwf2": (1, uwf(["closr_knn", "hc_closr"])),
+    },
+    # Mức sàn một đặc trưng cho mọi kịch bản, và XGBoost ở nơi đo được chiến thuật suy từ họ dự đoán. Chạy được trên CPU
+    "floor": {
+        "a": (0, ["protocol=p0 model=stump"] + hard("stump", ("p1", "ps", "pf"))
+              + [f"protocol=p1 protocol.heldout={h} model=xgboost" for h in ("slowloris", "ssh")]),
+        "p2": (0, [f"{p} model=stump" for p in P2]),
+        "uwf": (0, uwf(["stump"]) + [f"dataset=uwf protocol=p1 protocol.heldout={t} model=xgboost" for t in ("t1018", "t1592", "t1595")]),
     },
     # Đối chứng không có đầu chiến thuật, và embedding số ở P0, P1
     "ablation": {

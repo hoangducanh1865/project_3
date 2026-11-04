@@ -1,0 +1,3 @@
+# Một đặc trưng chọn trên train: mức sàn để phát hiện đặc trưng đường tắt.
+name: stump
+kind: stump

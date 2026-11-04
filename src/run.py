@@ -12,7 +12,7 @@ from omegaconf import OmegaConf
 
 from .data import class_table, cross_split, drop_top_features, load_columns, load_csv, load_ts, make_split
 from .metrics import alert_metrics, attack_metrics, closed_metrics, detection_metrics
-from .models import BUILDERS
+from .models import BUILDERS, tactic_of
 from .variants import evaluate_variants
 
 log = logging.getLogger(__name__)
@@ -51,6 +51,7 @@ def main(cfg):
     log.info("known=%s | OOD=%s | train=%d test=%d ood=%d", sp["classes"], sp["ood_classes"],
              len(sp["X_tr"]), len(sp["X_te"]), len(sp["X_ood"]))
 
+    sp["cols"] = cols
     t0 = time.time()
     scorer = BUILDERS[cfg.model.kind](cfg, sp, dev)
     fit_s = time.time() - t0
@@ -74,6 +75,11 @@ def main(cfg):
         "dropped_features": dropped,
         "config": OmegaConf.to_container(cfg, resolve=True),
     }
+    if pred_ood is not None and cfg.dataset.get("tactics") and len(sp["ood_names"]):
+        # chiến thuật suy từ họ dự đoán: đối chứng cho đầu chiến thuật của HC-CLOSR, dùng được với mọi mô hình
+        fam_tac = np.array([tactic_of(c, cfg.dataset.tactics) for c in sp["classes"]])
+        true_tac = np.array([tactic_of(c, cfg.dataset.tactics) for c in sp["ood_names"]])
+        res["ood_tactic_by_family"] = float((fam_tac[pred_ood] == true_tac).mean())
     out = os.path.join(HydraConfig.get().runtime.output_dir, "result.json")
     with open(out, "w") as f:
         json.dump(res, f, ensure_ascii=False, indent=2, default=str)

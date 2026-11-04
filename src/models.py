@@ -138,6 +138,23 @@ def build_xgboost(cfg, sp, dev):
     return scorer
 
 
+# ---------------------------------------------------------------- Một đặc trưng
+def build_stump(cfg, sp, dev):
+    """Mức sàn của mọi kịch bản: một đặc trưng duy nhất, chọn trên train theo AUROC benign và tấn công (kiểm tra của Flood 2024)."""
+    from sklearn.metrics import roc_auc_score
+    idx = np.random.default_rng(cfg.seed).permutation(len(sp["X_tr"]))[:200_000]
+    X, y = sp["X_tr"][idx], sp["y_tr"][idx] != 0
+    auc = np.array([roc_auc_score(y, c) if c.std() > 0 else .5 for c in X.T])
+    j = int(np.abs(auc - .5).argmax())
+    sign = 1 if auc[j] >= .5 else -1
+
+    def scorer(Xn):
+        return sign * Xn[:, j], None
+    scorer.attack = lambda Xn: sign * Xn[:, j]
+    scorer.extra = lambda sp_: {"stump_feature": str(sp_["cols"][j]), "stump_train_auroc": float(max(auc[j], 1 - auc[j]))}
+    return scorer
+
+
 # ---------------------------------------------------------------- TabPFN
 def build_tabpfn(cfg, sp, dev):
     """TabPFN v2 (Hollmann 2025): không huấn luyện, nạp tối đa m.max_train mẫu làm ngữ cảnh.
@@ -414,5 +431,5 @@ def build_hc_closr(cfg, sp, dev):
 BUILDERS = {
     "mlp": build_mlp, "xgboost": build_xgboost, "iforest": build_iforest,
     "autoencoder": build_autoencoder, "clad": build_clad, "closr": build_closr,
-    "hc_closr": build_hc_closr, "closr_knn": build_closr_knn, "tabpfn": build_tabpfn,
+    "hc_closr": build_hc_closr, "closr_knn": build_closr_knn, "tabpfn": build_tabpfn, "stump": build_stump,
 }
