@@ -1,8 +1,10 @@
 "use client";
 
 import Papa from "papaparse";
+import { Play, Upload } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { APPROVAL, num, TACTIC, TIER } from "./labels";
+import { LevelBadge, ResponsePanel, Stat, StateText } from "./ui";
 
 type Alert = {
   status: "alert"; tier: number; family: string; score: number; tactic: string; L: number; I: number; R: number;
@@ -141,134 +143,124 @@ export default function Batch() {
 
   return (
     <main>
-        <section className="card">
-          <h2>Nạp lưu lượng mạng</h2>
-          <div className="actions">
-            <label>
-              Mô hình{" "}
-              <select value={modelId} disabled={!!busy} onChange={(e) => { setModelId(e.target.value); reset(null, ""); }}>
-                {meta?.models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </label>
-            <button onClick={loadSamples} disabled={!!busy || !modelId}>Dùng lưu lượng mẫu</button>
-            <label className="file">Tải file CSV<input type="file" accept=".csv" onChange={loadFile} /></label>
-            <button className="primary" onClick={analyze} disabled={!table || !!busy || !modelId}>Phân tích</button>
-            {table && (
-              <span>
-                {source}: {table.data.length} flow
-                {table.data.length > limit && `, chỉ phân tích ${limit} flow đầu`}
-              </span>
-            )}
-          </div>
-          <p className="hint">File CSV cần có {model?.n_columns ?? 72} cột đặc trưng theo định dạng LYCOS-IDS2017.</p>
-          {busy && <p className="hint" role="status">{busy}</p>}
-          {error && <p className="error" role="alert">{error}</p>}
-        </section>
+      <div className="page-head">
+        <div>
+          <h1>Phân tích file</h1>
+          <p>Kiểm tra một tập lưu lượng có sẵn bằng mô hình đã huấn luyện</p>
+        </div>
+      </div>
 
-        {flows && (
-          <>
-            <section className="stats" aria-label="Tổng quan">
-              <div className="stat"><strong>{flows.length}</strong><span>Flow đã phân tích</span></div>
-              <div className="stat"><strong>{counts.normal}</strong><span>Bình thường</span></div>
-              <div className="stat"><strong>{counts.t1}</strong><span>Tầng 1: đã biết</span></div>
-              {model?.has_tier2 && <div className="stat"><strong>{counts.t2}</strong><span>Tầng 2: biến thể</span></div>}
-              <div className="stat"><strong>{counts.t3}</strong><span>Tầng 3: hoàn toàn mới</span></div>
-              <div className="stat emph"><strong>{counts.pending}</strong><span>Chờ chuyên viên duyệt</span></div>
-            </section>
-            {counts.invalid > 0 && <p className="hint">Bỏ qua {counts.invalid} flow có giá trị không hợp lệ.</p>}
+      <section className="card" data-tour="batch-input">
+        <div className="actions">
+          <label className="field">
+            <span>Mô hình</span>
+            <select value={modelId} disabled={!!busy} onChange={(e) => { setModelId(e.target.value); reset(null, ""); }}>
+              {meta?.models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+          </label>
+          <button onClick={loadSamples} disabled={!!busy || !modelId}>Dùng lưu lượng mẫu</button>
+          <label className="file"><Upload size={15} aria-hidden="true" />Tải file CSV<input type="file" accept=".csv" onChange={loadFile} /></label>
+          <button className="primary" onClick={analyze} disabled={!table || !!busy || !modelId}>
+            <Play size={14} aria-hidden="true" />Phân tích
+          </button>
+          {table && (
+            <span className="hint">
+              {source}: {table.data.length} flow{table.data.length > limit && `, chỉ phân tích ${limit} flow đầu`}
+            </span>
+          )}
+        </div>
+        <p className="hint">File CSV cần có {model?.n_columns ?? 72} cột đặc trưng theo định dạng LYCOS-IDS2017.</p>
+        {busy && <p className="hint" role="status">{busy}</p>}
+        {error && <p className="error" role="alert">{error}</p>}
+      </section>
 
-            <div className="workspace">
-              <section className="card">
+      {flows && (
+        <>
+          <section className="stats" aria-label="Tổng quan">
+            <Stat label="Flow đã phân tích" value={flows.length} />
+            <Stat label="Bình thường" value={counts.normal} />
+            <Stat label="Tầng 1: đã biết" value={counts.t1} />
+            {model?.has_tier2 && <Stat label="Tầng 2: biến thể" value={counts.t2} />}
+            <Stat label="Tầng 3: hoàn toàn mới" value={counts.t3} />
+            <Stat label="Chờ chuyên viên duyệt" value={counts.pending} emph />
+          </section>
+          {counts.invalid > 0 && <p className="hint">Bỏ qua {counts.invalid} flow có giá trị không hợp lệ.</p>}
+
+          <div className="workspace">
+            <section className="card flush">
+              <div className="card-head">
                 <h2>Hàng đợi cảnh báo</h2>
                 <div className="tabs">
                   {tabs.map(([key, label, n]) => (
-                    <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} ({n})</button>
+                    <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} <b>{n}</b></button>
                   ))}
                 </div>
-                <div className="scroll">
-                  <table>
-                    <thead>
-                      <tr><th>Nguồn</th><th>Đích</th><th>Tầng</th><th>Chiến thuật</th><th>R</th><th>Mức</th><th>Trạng thái</th></tr>
-                    </thead>
-                    <tbody>
-                      {shown.map(({ row, a }) => (
-                        <tr key={row} tabIndex={0} aria-selected={row === selected} onClick={() => setSelected(row)}
-                          onKeyDown={(e) => { if (e.key === "Enter") setSelected(row); }}>
-                          <td className="addr">{endpoint(row, "src")}</td>
-                          <td className="addr">{endpoint(row, "dst")}</td>
-                          <td className="num">{a.tier}</td>
-                          <td>{(TACTIC[a.tactic] ?? a.tactic).split(" (")[0]}</td>
-                          <td className="num">{a.R}</td>
-                          <td><span className={a.mode === APPROVAL ? "badge solid" : "badge"}>{a.level}</span></td>
-                          <td>{stateText(row, a)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {shown.length === 0 && <p className="hint">Không có cảnh báo trong mục này.</p>}
-                </div>
-              </section>
+              </div>
+              <div className="scroll">
+                <table>
+                  <thead>
+                    <tr><th>Mức</th><th>Nguồn</th><th>Đích</th><th>Phân loại</th><th className="right">R</th><th>Trạng thái</th></tr>
+                  </thead>
+                  <tbody>
+                    {shown.map(({ row, a }) => (
+                      <tr key={row} tabIndex={0} aria-selected={row === selected} onClick={() => setSelected(row)}
+                        onKeyDown={(e) => { if (e.key === "Enter") setSelected(row); }}>
+                        <td><LevelBadge level={a.level} /></td>
+                        <td className="addr">{endpoint(row, "src")}</td>
+                        <td className="addr">{endpoint(row, "dst")}</td>
+                        <td>Tầng {a.tier} · {(TACTIC[a.tactic] ?? a.tactic).split(" (")[0]}</td>
+                        <td className="num right">{a.R}</td>
+                        <td><StateText text={stateText(row, a)} /></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {shown.length === 0 && <p className="empty">Không có cảnh báo trong mục này.</p>}
+              </div>
+            </section>
 
-              <section className="card detail">
-                <h2>Chi tiết và biện pháp ứng phó</h2>
-                {!current ? <p className="hint">Chọn một cảnh báo để xem biện pháp đề xuất.</p> : (
-                  <>
-                    <dl>
-                      <dt>Kết nối</dt><dd className="addr">{endpoint(current.row, "src")} → {endpoint(current.row, "dst")}</dd>
-                      <dt>Phân tầng</dt><dd>Tầng {current.a.tier}: {TIER[current.a.tier]}</dd>
-                      <dt>Chiến thuật</dt><dd>{TACTIC[current.a.tactic] ?? current.a.tactic}</dd>
-                      <dt>{current.a.tier === 1 ? "Họ tấn công" : "Họ gần nhất"}</dt><dd>{current.a.family}</dd>
-                      <dt>Điểm OOD</dt><dd>{num(current.a.score, 2)}</dd>
-                      <dt>Rủi ro</dt><dd>R = L × I = {current.a.L} × {current.a.I} = {current.a.R}</dd>
-                      {value(current.row, "label") !== undefined && (
-                        <><dt>Nhãn thật</dt><dd>{String(value(current.row, "label"))} (chỉ để đối chiếu, mô hình không dùng)</dd></>
-                      )}
-                    </dl>
-                    <h3>Mức {current.a.level}: {current.a.action}</h3>
-                    <p className="hint">
-                      {current.a.reversible ? "Đảo ngược được" : "Khó đảo ngược"}. Thực hiện: {current.a.mode}.
-                    </p>
-                    <h3>Biện pháp ngay (D3FEND)</h3>
-                    <ul>{current.a.d3fend_now.map((m) => <li key={m}>{m}</li>)}</ul>
-                    {current.a.d3fend_later.length > 0 && (
-                      <>
-                        <h3>Củng cố sau</h3>
-                        <ul>{current.a.d3fend_later.map((m) => <li key={m}>{m}</li>)}</ul>
-                      </>
-                    )}
-                    {current.a.mode === APPROVAL && (
-                      <div className="decision">
-                        {decisions[current.row] ? (
-                          <>
-                            <span>{stateText(current.row, current.a)}</span>
-                            <button onClick={() => setDecisions(({ [current.row]: _, ...rest }) => rest)}>Hoàn tác</button>
-                          </>
-                        ) : (
-                          <>
-                            <button className="primary" onClick={() => setDecisions((d) => ({ ...d, [current.row]: "approved" }))}>Duyệt</button>
-                            <button onClick={() => setDecisions((d) => ({ ...d, [current.row]: "rejected" }))}>Từ chối</button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            </div>
-          </>
-        )}
+            <section className="card detail">
+              {!current ? <p className="empty">Chọn một cảnh báo để xem biện pháp đề xuất.</p> : (
+                <ResponsePanel
+                  title={TACTIC[current.a.tactic] ?? current.a.tactic}
+                  plan={current.a}
+                  facts={[
+                    ["Kết nối", <span className="addr" key="k">{endpoint(current.row, "src")} → {endpoint(current.row, "dst")}</span>],
+                    ["Phân tầng", `Tầng ${current.a.tier}: ${TIER[current.a.tier]}`],
+                    [current.a.tier === 1 ? "Họ tấn công" : "Họ gần nhất", current.a.family],
+                    ["Điểm OOD", num(current.a.score, 2)],
+                  ]}
+                  note={value(current.row, "label") !== undefined
+                    ? `Nhãn thật: ${String(value(current.row, "label"))} (chỉ để đối chiếu, mô hình không dùng)` : undefined}
+                  footer={decisions[current.row] ? (
+                    <>
+                      <StateText text={stateText(current.row, current.a)} />
+                      <button onClick={() => setDecisions(({ [current.row]: _, ...rest }) => rest)}>Hoàn tác</button>
+                    </>
+                  ) : (
+                    <>
+                      <button className="primary" onClick={() => setDecisions((d) => ({ ...d, [current.row]: "approved" }))}>Duyệt</button>
+                      <button onClick={() => setDecisions((d) => ({ ...d, [current.row]: "rejected" }))}>Từ chối</button>
+                    </>
+                  )}
+                />
+              )}
+            </section>
+          </div>
+        </>
+      )}
 
+      {model && (
         <footer className="notes">
-          {model && (
-            <p>
-              {model.name}: lớp {model.ood_classes.join(", ")} không có trong tập huấn luyện. Trên dữ liệu kiểm thử, khi
-              gặp lớp này: AUROC {num(model.metrics.auroc)}, tỉ lệ phát hiện {num(model.metrics.det_rate)}, tỉ lệ báo
-              nhầm {num(model.metrics.fpr_thr)}.
-              {!model.has_tier2 && " Mô hình này không có đầu chiến thuật nên không có tầng 2, flow lạ đều xếp tầng 3."}
-            </p>
-          )}
+          <p>
+            {model.name}: lớp {model.ood_classes.join(", ")} không có trong tập huấn luyện. Trên dữ liệu kiểm thử, khi gặp
+            lớp này: AUROC {num(model.metrics.auroc)}, tỉ lệ phát hiện {num(model.metrics.det_rate)}, tỉ lệ báo nhầm{" "}
+            {num(model.metrics.fpr_thr)}.
+            {!model.has_tier2 && " Mô hình này không có đầu chiến thuật nên không có tầng 2, flow lạ đều xếp tầng 3."}
+          </p>
           <p>Các hành động chỉ là mô phỏng, chưa nối với tường lửa thật. Mức ứng phó và quy tắc phân tầng là thiết kế của đề tài, cần đối chiếu với chuyên gia.</p>
         </footer>
+      )}
     </main>
   );
 }

@@ -1,7 +1,9 @@
 "use client";
 
+import { Bell, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { APPROVAL, TACTIC, TIER } from "./labels";
+import { LevelBadge, ResponsePanel, Stat, StateText } from "./ui";
 
 type Incident = {
   id: string; src: string; dst: string; opened: number; last: number; flows: number; alerts: number;
@@ -27,29 +29,38 @@ const short = (t: string) => (TACTIC[t] ?? t).split(" (")[0];
 
 function AlertChart({ points }: { points: Point[] }) {
   const [hover, setHover] = useState<number | null>(null);
-  const W = 720, H = 120, slot = W / SLOTS, offset = SLOTS - points.length;   // phút mới nhất luôn ở bên phải
+  const W = 720, H = 132, slot = W / SLOTS, offset = SLOTS - points.length;   // phút mới nhất luôn ở bên phải
   const top = Math.max(10, ...points.map((p) => p.alerts));
   const shown = hover === null ? null : points[hover];
   return (
     <figure className="chart">
       <figcaption>
-        Cảnh báo mỗi phút, 60 phút gần nhất
-        <span>{shown ? ` · ${clock(shown.t)}: ${shown.alerts} cảnh báo trên ${shown.flows} flow` : ` · cao nhất ${top}`}</span>
+        <h2>Cảnh báo mỗi phút</h2>
+        <span>60 phút gần nhất · cao nhất {top}</span>
       </figcaption>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Số cảnh báo mỗi phút"
-        onMouseLeave={() => setHover(null)}>
-        <line x1="0" y1={H - 0.5} x2={W} y2={H - 0.5} className="axis" />
-        {points.map((p, i) => {
-          const h = Math.max(p.alerts ? 2 : 0, (p.alerts / top) * (H - 4));
-          const w = Math.max(slot - 2, 1);
-          return (
-            <g key={p.t} onMouseEnter={() => setHover(i)}>
-              <rect x={(i + offset) * slot} y="0" width={slot} height={H} fill="transparent" />
-              <rect x={(i + offset) * slot} y={H - h - 1} width={w} height={h} rx="2" className={hover === i ? "bar on" : "bar"} />
-            </g>
-          );
-        })}
-      </svg>
+      <div className="plot">
+        {shown && (
+          <div className="tip" style={{ left: `${((hover! + offset + 0.5) / SLOTS) * 100}%` }}>
+            <b>{clock(shown.t)}</b> {shown.alerts} cảnh báo / {shown.flows} flow
+          </div>
+        )}
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="Số cảnh báo mỗi phút"
+          onMouseLeave={() => setHover(null)}>
+          <line x1="0" y1="0.5" x2={W} y2="0.5" className="grid" />
+          <line x1="0" y1={H / 2} x2={W} y2={H / 2} className="grid" />
+          <line x1="0" y1={H - 0.5} x2={W} y2={H - 0.5} className="axis" />
+          {points.map((p, i) => {
+            const h = Math.max(p.alerts ? 2 : 0, (p.alerts / top) * (H - 4));
+            const x = (i + offset) * slot;
+            return (
+              <g key={p.t} onMouseEnter={() => setHover(i)}>
+                <rect x={x} y="0" width={slot} height={H} fill="transparent" />
+                <rect x={x + 1} y={H - h - 1} width={Math.max(slot - 2, 1)} height={h} rx="2" className={hover === i ? "bar on" : "bar"} />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
       <div className="ticks"><span>60 phút trước</span><span>Hiện tại</span></div>
     </figure>
   );
@@ -130,127 +141,108 @@ export default function Live() {
 
   return (
     <main>
-      <section className="card status">
-        <span className={stale ? "dot off" : "dot"} aria-hidden="true" />
-        <span>
-          {state?.updated
-            ? `${stale ? "Luồng đang tạm dừng" : "Đang giám sát"} · cập nhật lúc ${clock(state.updated)}`
-            : "Đang kết nối..."}
-        </span>
-        <span className="badge">Dữ liệu mô phỏng</span>
+      <div className="page-head" data-tour="status">
+        <div>
+          <h1>Giám sát trực tiếp</h1>
+          <p>
+            <span className={stale ? "live off" : "live"} aria-hidden="true" />
+            {state?.updated
+              ? `${stale ? "Luồng đang tạm dừng" : "Đang giám sát"} · cập nhật lúc ${clock(state.updated)}`
+              : "Đang kết nối..."}
+            <span className="tag">Dữ liệu mô phỏng</span>
+          </p>
+        </div>
         {permission === "default" && (
-          <button onClick={() => Notification.requestPermission().then(setPermission)}>Bật thông báo trình duyệt</button>
+          <button data-tour="notify" onClick={() => Notification.requestPermission().then(setPermission)}>
+            <Bell size={15} aria-hidden="true" />Bật thông báo
+          </button>
         )}
-      </section>
+      </div>
       {error && <p className="error" role="alert">{error}</p>}
 
       {banner && (
-        <section className="banner" role="alert">
+        <aside className="toast" role="alert">
           <div>
-            <strong>Phát hiện xâm nhập lúc {clock(banner.opened)}, mức {banner.level}</strong>
-            <span>{banner.src} → {banner.dst}: {short(banner.tactic)}, tầng {banner.tier}</span>
-          </div>
-          <div className="actions">
+            <strong>Phát hiện xâm nhập lúc {clock(banner.opened)}</strong>
+            <span className="addr">{banner.src} → {banner.dst}</span>
+            <span>{short(banner.tactic)} · Tầng {banner.tier} · Mức {banner.level}</span>
             <button onClick={() => { setFilter("all"); setSelected(banner.id); setBanner(null); }}>Xem chi tiết</button>
-            <button onClick={() => setBanner(null)}>Đóng</button>
           </div>
-        </section>
+          <button className="close" aria-label="Đóng" onClick={() => setBanner(null)}><X size={16} /></button>
+        </aside>
       )}
 
-      {s && (
-        <section className="stats" aria-label="Tổng quan">
-          <div className="stat"><strong>{s.flows_60m.toLocaleString("vi-VN")}</strong><span>Flow trong 60 phút</span></div>
-          <div className="stat"><strong>{s.alerts_60m.toLocaleString("vi-VN")}</strong><span>Cảnh báo trong 60 phút</span></div>
-          <div className="stat"><strong>{openCount}</strong><span>Sự cố đang mở</span></div>
-          <div className="stat">
-            <strong>{s.campaigns_found}/{s.campaigns_done}</strong><span>Chiến dịch đã phát hiện</span>
-          </div>
-          <div className="stat">
-            <strong>{s.ttd_median === null ? "–" : `${s.ttd_median} phút`}</strong><span>Thời gian phát hiện (trung vị)</span>
-          </div>
-          <div className="stat emph"><strong>{pending}</strong><span>Chờ chuyên viên duyệt</span></div>
-        </section>
-      )}
+      <section className="stats" aria-label="Tổng quan" data-tour="stats">
+        <Stat label="Flow trong 60 phút" value={s?.flows_60m.toLocaleString("vi-VN")} />
+        <Stat label="Cảnh báo trong 60 phút" value={s?.alerts_60m.toLocaleString("vi-VN")} />
+        <Stat label="Sự cố đang mở" value={s ? openCount : undefined} />
+        <Stat label="Chiến dịch đã phát hiện" value={s ? `${s.campaigns_found}/${s.campaigns_done}` : undefined} />
+        <Stat label="Thời gian phát hiện (trung vị)" value={s ? (s.ttd_median === null ? "–" : `${s.ttd_median} phút`) : undefined} />
+        <Stat label="Chờ chuyên viên duyệt" value={s ? pending : undefined} emph />
+      </section>
 
-      {state && state.series.length > 0 && <section className="card"><AlertChart points={state.series} /></section>}
+      {state && state.series.length > 0 && <section className="card" data-tour="chart"><AlertChart points={state.series} /></section>}
 
       <div className="workspace">
-        <section className="card">
-          <h2>Sự cố</h2>
-          <div className="tabs">
-            {tabs.map(([key, label, n]) => (
-              <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}>{label} ({n})</button>
-            ))}
+        <section className="card flush" data-tour="incidents">
+          <div className="card-head">
+            <h2>Hàng đợi sự cố</h2>
+            <div className="tabs">
+              {tabs.map(([key, label, n]) => (
+                <button key={key} aria-pressed={filter === key} onClick={() => setFilter(key)}
+                  data-tour={key === "all" ? "filter-all" : undefined}>{label} <b>{n}</b></button>
+              ))}
+            </div>
           </div>
           <div className="scroll">
             <table>
               <thead>
-                <tr><th>Mở lúc</th><th>Nguồn</th><th>Đích</th><th>Tầng</th><th>Chiến thuật</th><th>Cảnh báo</th><th>Mức</th><th>Trạng thái</th></tr>
+                <tr><th>Mức</th><th>Mở lúc</th><th>Nguồn</th><th>Đích</th><th>Phân loại</th><th className="right">Cảnh báo</th><th>Trạng thái</th></tr>
               </thead>
               <tbody>
                 {shown.map((i) => (
                   <tr key={i.id} tabIndex={0} aria-selected={i.id === selected} onClick={() => setSelected(i.id)}
                     onKeyDown={(e) => { if (e.key === "Enter") setSelected(i.id); }}>
+                    <td><LevelBadge level={i.level} /></td>
                     <td className="num">{clock(i.opened)}</td>
                     <td className="addr">{i.src}</td>
                     <td className="addr">{i.dst}</td>
-                    <td className="num">{i.tier}</td>
-                    <td>{short(i.tactic)}</td>
-                    <td className="num">{i.alerts}/{i.flows}</td>
-                    <td><span className={i.mode === APPROVAL ? "badge solid" : "badge"}>{i.level}</span></td>
-                    <td>{stateText(i)}</td>
+                    <td>Tầng {i.tier} · {short(i.tactic)}</td>
+                    <td className="num right">{i.alerts}/{i.flows}</td>
+                    <td><StateText text={stateText(i)} /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
-            {shown.length === 0 && <p className="hint">Không có sự cố trong mục này.</p>}
+            {shown.length === 0 && <p className="empty">Không có sự cố trong mục này.</p>}
           </div>
         </section>
 
-        <section className="card detail">
-          <h2>Chi tiết và biện pháp ứng phó</h2>
-          {!current ? <p className="hint">Chọn một sự cố để xem biện pháp đề xuất.</p> : (
-            <>
-              <dl>
-                <dt>Kết nối</dt><dd className="addr">{current.src} → {current.dst}</dd>
-                <dt>Thời gian</dt><dd>{clock(current.opened)} đến {clock(current.last)}</dd>
-                <dt>Phân tầng</dt><dd>Tầng {current.tier}: {TIER[current.tier]}</dd>
-                <dt>Chiến thuật</dt><dd>{TACTIC[current.tactic] ?? current.tactic}</dd>
-                <dt>{current.tier === 1 ? "Họ tấn công" : "Họ gần nhất"}</dt><dd>{current.family}</dd>
-                <dt>Cảnh báo</dt><dd>{current.alerts} trên {current.flows} flow</dd>
-                <dt>Rủi ro</dt><dd>R = L × I = {current.L} × {current.I} = {current.R}</dd>
-                <dt>Nhãn giả lập</dt>
-                <dd>
-                  {Object.keys(current.truth).length ? Object.keys(current.truth).join(", ") : "không có tấn công, đây là báo nhầm"}
-                  {" "}(chỉ để đối chiếu, mô hình không dùng)
-                </dd>
-              </dl>
-              <h3>Mức {current.level}: {current.action}</h3>
-              <p className="hint">{current.reversible ? "Đảo ngược được" : "Khó đảo ngược"}. Thực hiện: {current.mode}.</p>
-              <h3>Biện pháp ngay (D3FEND)</h3>
-              <ul>{current.d3fend_now.map((m) => <li key={m}>{m}</li>)}</ul>
-              {current.d3fend_later.length > 0 && (
+        <section className="card detail" data-tour="detail">
+          {!current ? <p className="empty">Chọn một sự cố để xem biện pháp đề xuất.</p> : (
+            <ResponsePanel
+              title={TACTIC[current.tactic] ?? current.tactic}
+              plan={current}
+              facts={[
+                ["Kết nối", <span className="addr" key="k">{current.src} → {current.dst}</span>],
+                ["Thời gian", `${clock(current.opened)} đến ${clock(current.last)}`],
+                ["Phân tầng", `Tầng ${current.tier}: ${TIER[current.tier]}`],
+                [current.tier === 1 ? "Họ tấn công" : "Họ gần nhất", current.family],
+                ["Cảnh báo", `${current.alerts} trên ${current.flows} flow`],
+              ]}
+              note={`Nhãn giả lập: ${Object.keys(current.truth).length ? Object.keys(current.truth).join(", ") : "không có tấn công, đây là báo nhầm"} (chỉ để đối chiếu, mô hình không dùng)`}
+              footer={decisionOf(current) ? (
                 <>
-                  <h3>Củng cố sau</h3>
-                  <ul>{current.d3fend_later.map((m) => <li key={m}>{m}</li>)}</ul>
+                  <StateText text={stateText(current)} />
+                  <button onClick={() => decide(current, null)}>Hoàn tác</button>
                 </>
-              )}
-              {current.mode === APPROVAL && (
-                <div className="decision">
-                  {decisionOf(current) ? (
-                    <>
-                      <span>{stateText(current)}</span>
-                      <button onClick={() => decide(current, null)}>Hoàn tác</button>
-                    </>
-                  ) : current.status === "open" && (
-                    <>
-                      <button className="primary" onClick={() => decide(current, "approved")}>Duyệt</button>
-                      <button onClick={() => decide(current, "rejected")}>Từ chối</button>
-                    </>
-                  )}
-                </div>
-              )}
-            </>
+              ) : current.status === "open" ? (
+                <>
+                  <button className="primary" onClick={() => decide(current, "approved")}>Duyệt</button>
+                  <button onClick={() => decide(current, "rejected")}>Từ chối</button>
+                </>
+              ) : undefined}
+            />
           )}
         </section>
       </div>
@@ -262,8 +254,8 @@ export default function Live() {
           giả lập. Mô hình: HC-CLOSR.
         </p>
         <p>
-          Sự cố chỉ mở khi một cặp nguồn và đích có từ 5 cảnh báo trong 5 phút và tỉ lệ cảnh báo từ 30% trở lên. Trong
-          24 giờ: {s?.incidents_24h ?? 0} sự cố, {s?.false_24h ?? 0} báo nhầm. Các hành động chỉ là mô phỏng, chưa nối với
+          Sự cố chỉ mở khi một cặp nguồn và đích có từ 5 cảnh báo trong 5 phút và tỉ lệ cảnh báo từ 30% trở lên. Trong 24
+          giờ: {s?.incidents_24h ?? 0} sự cố, {s?.false_24h ?? 0} báo nhầm. Các hành động chỉ là mô phỏng, chưa nối với
           tường lửa thật. Ngưỡng và mức ứng phó là thiết kế của đề tài, cần đối chiếu với chuyên gia.
         </p>
       </footer>
