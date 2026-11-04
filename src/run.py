@@ -10,9 +10,10 @@ import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
-from .data import class_table, load_csv, make_split
-from .metrics import closed_metrics, detection_metrics
+from .data import class_table, cross_split, drop_top_features, load_columns, load_csv, load_ts, make_split
+from .metrics import alert_metrics, attack_metrics, closed_metrics, detection_metrics
 from .models import BUILDERS
+from .variants import evaluate_variants
 
 log = logging.getLogger(__name__)
 
@@ -26,8 +27,27 @@ def main(cfg):
 
     X, y = load_csv(cfg.dataset)
     log.info("lớp trong dữ liệu: %s", class_table(y))
-    sp = make_split(X, y, cfg.dataset, cfg.protocol, cfg.eval_cap, cfg.seed)
+    cols, _ = load_columns(cfg.dataset)
+    proto = cfg.protocol
+    ts = load_ts(cfg.dataset) if proto.name == "p3" else None
+    if proto.name == "p2":
+        dt = OmegaConf.load(os.path.join(os.path.dirname(__file__), "..", "conf", "dataset", f"{proto.target}.yaml"))
+        Xt, yt = load_csv(dt)
+        cols_t, _ = load_columns(dt)
+        common = [c for c in cols if c in cols_t]
+        log.info("P2: %d cột chung, thiếu ở đích: %s", len(common), sorted(set(cols) - set(common)))
+        X, Xt = X[:, [cols.index(c) for c in common]], Xt[:, [cols_t.index(c) for c in common]]
+        cols = common
+    sp = make_split(X, y, cfg.dataset, proto, cfg.eval_cap, cfg.seed, ts)
     del X
+    if proto.name == "p2":
+        log.info("lớp ở mạng đích: %s", class_table(yt))
+        sp = cross_split(sp, Xt, yt, dt, cfg.eval_cap, proto.per_class, cfg.seed)
+        del Xt
+    dropped = []
+    if proto.get("drop_top"):
+        sp, cols, dropped = drop_top_features(sp, proto.drop_top, cols, cfg.seed, "cuda" if dev.type == "cuda" else "cpu")
+        log.info("bỏ đặc trưng: %s", dropped)
     log.info("known=%s | OOD=%s | train=%d test=%d ood=%d", sp["classes"], sp["ood_classes"],
              len(sp["X_tr"]), len(sp["X_te"]), len(sp["X_ood"]))
 
@@ -37,7 +57,7 @@ def main(cfg):
 
     s_va, _ = scorer(sp["X_va"])
     s_kn, pred = scorer(sp["X_te"])
-    s_ood, _ = scorer(sp["X_ood"])
+    s_ood, pred_ood = scorer(sp["X_ood"])
     res = {
         "protocol": cfg.protocol.name, "heldout": cfg.protocol.get("heldout"),
         "model": cfg.model.name, "seed": cfg.seed, "device": str(dev),
@@ -46,7 +66,12 @@ def main(cfg):
         "fit_seconds": round(fit_s, 1),
         **detection_metrics(s_kn, s_ood, s_va),
         **(closed_metrics(sp["y_te"], pred) if pred is not None else {}),
+        **(alert_metrics(s_kn, pred, sp["y_te"], s_ood, pred_ood, s_va) if pred is not None else {}),
+        **(attack_metrics(scorer.attack(sp["X_te"][sp["y_te"] == 0]), scorer.attack(sp["X_ood"]),
+                          scorer.attack(sp["X_va"][sp["y_va"] == 0])) if hasattr(scorer, "attack") else {}),
         **(scorer.extra(sp) if hasattr(scorer, "extra") else {}),
+        **({"variants": evaluate_variants(scorer, sp, cols, s_va, proto.variants)} if proto.get("variants") else {}),
+        "dropped_features": dropped,
         "config": OmegaConf.to_container(cfg, resolve=True),
     }
     out = os.path.join(HydraConfig.get().runtime.output_dir, "result.json")

@@ -1,0 +1,17 @@
+# LycoS-Unicas-IDS2018 [5]: PCAP của CSE-CIC-IDS2018 trích lại bằng LycoSTand, 13,7 triệu flow.
+# Kho: github.com/MarcoCantone/LycoS-Unicas-IDS2018. Chỉ giữ 15% lưu lượng bình thường khi nạp.
+name: lycos2018
+path: ${oc.env:LYCOS18_CSV,data/lycos18.csv}
+cache: ${oc.env:CACHE_DIR,/tmp}/lycos18_cache.npz
+label_col: label
+benign: benign
+benign_frac: 0.15
+drop_cols: [flow_id, src_addr, src_port, dst_addr, dst_port, ip_prot, timestamp]
+rare_threshold: 100
+max_per_class: 100000
+tactics:
+  impact: [dos, ddos]
+  credential_access: [patator, bruteforce]
+  initial_access: [sql, xss, heartbleed]
+  command_and_control: [bot]
+  discovery: [portscan]

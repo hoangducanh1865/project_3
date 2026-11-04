@@ -1,0 +1,6 @@
+# PV: P1, thêm đánh giá trên biến thể tự sinh của tấn công (src/variants.py).
+name: pv
+heldout: ???
+variants:
+  dilate: [2, 5, 10, 50]
+  pad: [100, 500]
