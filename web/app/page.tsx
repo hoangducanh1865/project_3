@@ -159,7 +159,7 @@ export default function Page() {
     <>
       <header className="top">
         <h1>Giám sát xâm nhập mạng</h1>
-        <p>Phát hiện tấn công Out-of-Domain (OOD) và đề xuất biện pháp ứng phó bằng mô hình HC-CLOSR</p>
+        <p>Phát hiện tấn công Out-of-Domain (OOD) và đề xuất biện pháp ứng phó</p>
       </header>
       <main>
         <section className="card">

@@ -100,7 +100,8 @@ class HCDetector:
 
     def state(self):
         weights = {k: v.cpu() for k, v in self.model.state_dict().items()}
-        levels = [(s.start, s.stop, c.cpu(), [e.cpu() for e in ix]) for s, c, ix in self.levels]
+        # clone: e là lát cắt của embedding đầy đủ, không clone thì torch.save ghi cả tensor gốc
+        levels = [(s.start, s.stop, c.cpu(), [e.cpu().clone() for e in ix]) for s, c, ix in self.levels]
         return {"weights": weights, "levels": levels, "k": self.k, "stats": self.stats, "thr": self.thr,
                 "s_va": self.s_va, "info": self.info}
 

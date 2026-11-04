@@ -36,15 +36,13 @@ serve_image = with_code(modal.Image.debian_slim(python_version="3.12").pip_insta
 ).pip_install("numpy", "pandas", "fastapi[standard]"))
 
 
-@app.function(image=prep_image, gpu="T4", cpu=4, memory=16384, timeout=1800, volumes={VOL: volume}, secrets=[secret])
+@app.function(image=prep_image, cpu=8, memory=16384, timeout=3600, volumes={VOL: volume}, secrets=[secret])
 def prepare_closr(tactics: dict, impact: dict):
-    import torch
     from huggingface_hub import hf_hub_download
     from src.closr_detector import build
     csv = hf_hub_download("hoangducanh1865/project_3-data", "lycos2017/lycos.csv", repo_type="dataset",
                           token=os.environ["HF_TOKEN"])
-    dev = "cuda" if torch.cuda.is_available() else "cpu"
-    metrics = build(csv, "/opt/CLOSR/weights/closr.pt.tar", f"{VOL}/closr", tactics, impact, dev)
+    metrics = build(csv, "/opt/CLOSR/weights/closr.pt.tar", f"{VOL}/closr", tactics, impact, "cpu")
     volume.commit()
     return metrics
 

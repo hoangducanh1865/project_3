@@ -14,6 +14,8 @@ Viết mã trên laptop, `git push`, rồi notebook Colab chỉ `pull` và chạ
 | `src/` | `data.py` nạp và tách dữ liệu, `models.py` các mô hình, `response.py` đề xuất biện pháp ứng phó, `metrics.py`, `run.py` chạy một lần, `report.py` gom bảng |
 | `notebooks/` | `baseline.ipynb` chạy thực nghiệm, `colab.ipynb` mở SSH vào phiên Colab |
 | `scripts/` | `colab_ssh.sh`, kernel Kaggle trong `kaggle/`, `recover_results.py` khôi phục kết quả từ log |
+| `deploy/` | API suy luận trên Modal |
+| `web/` | Web giám sát xâm nhập mạng (Next.js, triển khai trên Vercel) |
 | `datasets/` | Hướng dẫn và script lấy mẫu dữ liệu (không chứa dữ liệu) |
 | `agents/` | Ghi chép tri thức cho agent, xem `CLAUDE.md` |
 
@@ -38,6 +40,20 @@ python -m src.report
 Baseline: MLP (điểm MSP), MLP + KNN theo [13], XGBoost, Isolation Forest, Autoencoder, CLAD, CLOSR. CLAD và CLOSR dùng mã gốc của [16] (Apache-2.0) với ngân sách huấn luyện nhỏ hơn bản gốc.
 
 Phương pháp đề xuất: `model=hc_closr` (HC-CLOSR), cùng ngân sách huấn luyện với CLOSR.
+
+## Web demo
+
+Web tại https://project3-ids.vercel.app gọi API trên Modal qua route server, khoá API không lộ ra trình duyệt.
+
+```bash
+pip install modal pyyaml
+python deploy/setup_modal.py                          # tạo secret từ .env
+PYTHONPATH=. modal run deploy/modal_app.py            # dựng CLOSR [16] từ trọng số gốc
+modal volume put project3-model <thư mục> /hc_closr   # nạp HC-CLOSR, thư mục do scripts/kaggle xuất ra
+PYTHONPATH=. modal deploy deploy/modal_app.py         # triển khai API
+```
+
+Web cần hai biến môi trường trên Vercel: `MODAL_API_URL`, `MODAL_API_KEY`.
 
 ## Không có trong repo
 
