@@ -130,16 +130,30 @@ def make_split(X, y, ds, proto, eval_cap, seed, ts=None):
     }
 
 
-def cross_split(sp, Xt, yt, dt, eval_cap, per_class, seed):
+def align_target(Zt, Zs, mode):
+    """Hiệu chỉnh P2: đưa đặc trưng mạng đích về thang của mạng nguồn, chỉ dùng flow không nhãn của mạng đích."""
+    if mode == "z":
+        m, s = Zt.mean(0), Zt.std(0) + 1e-6
+        return lambda Z: (Z - m) / s
+    q = np.linspace(0, 1, 201)
+    Qt, Qs = np.quantile(Zt, q, axis=0) + q[:, None] * 1e-6, np.quantile(Zs, q, axis=0)  # cộng để Qt tăng ngặt
+    return lambda Z: np.stack([np.interp(Z[:, j], Qt[:, j], Qs[:, j]) for j in range(Z.shape[1])], 1)
+
+
+def cross_split(sp, Xt, yt, dt, eval_cap, per_class, seed, align=None):
     """P2: `sp` là phép tách trên mạng nguồn. Thay phần kiểm thử bằng dữ liệu mạng đích, chuẩn hoá theo mạng nguồn.
 
     Known-test là lưu lượng bình thường của mạng đích. OOD là mọi tấn công của mạng đích, tối đa per_class mẫu mỗi lớp.
+    align (z, quantile): hiệu chỉnh thêm theo 200.000 flow không nhãn lấy ngẫu nhiên ở mạng đích.
     """
     rng = np.random.default_rng(seed)
     ben = np.array([_norm(n) == _norm(dt.benign) for n in yt])
     idx_b = rng.permutation(np.flatnonzero(ben))[:eval_cap]
     idx_a = np.concatenate([rng.permutation(np.flatnonzero(yt == c))[:per_class] for c in np.unique(yt[~ben])])
     z = lambda idx: ((Xt[idx] - sp["mu"]) / sp["sd"]).astype(np.float32)
+    if align:
+        fix = align_target(z(rng.permutation(len(Xt))[:200000]), sp["X_tr"], align)
+        base, z = z, lambda idx: fix(base(idx)).astype(np.float32)
     return {**sp, "X_te": z(idx_b), "y_te": np.zeros(len(idx_b), dtype=np.int64), "X_ood": z(idx_a),
             "ood_classes": np.unique(yt[idx_a]).tolist(), "ood_names": yt[idx_a]}
 

@@ -42,7 +42,7 @@ def main(cfg):
     del X
     if proto.name == "p2":
         log.info("lớp ở mạng đích: %s", class_table(yt))
-        sp = cross_split(sp, Xt, yt, dt, cfg.eval_cap, proto.per_class, cfg.seed)
+        sp = cross_split(sp, Xt, yt, dt, cfg.eval_cap, proto.per_class, cfg.seed, proto.get("align"))
         del Xt
     dropped = []
     if proto.get("drop_top"):
@@ -87,6 +87,13 @@ def main(cfg):
     with open(out, "w") as f:
         json.dump(res, f, ensure_ascii=False, indent=2, default=str)
     log.info("%s", {k: v for k, v in res.items() if k not in ("config", "known_classes")})
+    if hasattr(scorer, "parts"):
+        # điểm từng flow, để thử quy tắc kết hợp và hiệu chỉnh ngưỡng mà không phải huấn luyện lại
+        parts = {f"{a}_{k}": v for a, Xa in (("va", sp["X_va"]), ("te", sp["X_te"]), ("ood", sp["X_ood"]))
+                 for k, v in scorer.parts(Xa).items()}
+        np.savez_compressed(os.path.join(HydraConfig.get().runtime.output_dir, "scores.npz"), y_va=sp["y_va"],
+                            y_te=sp["y_te"], ood_names=np.array(sp["ood_names"], dtype=str),
+                            classes=np.array(sp["classes"], dtype=str), **parts)
     if cfg.artifact_dir:
         from .export import export
         export(cfg, scorer, sp, y, res)

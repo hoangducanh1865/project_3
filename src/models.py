@@ -135,6 +135,7 @@ def build_xgboost(cfg, sp, dev):
         p = clf.predict_proba(Xn)
         return 1 - p.max(1), p.argmax(1)
     scorer.attack = lambda Xn: 1 - clf.predict_proba(Xn)[:, 0]
+    scorer.parts = lambda Xn: {"proba": clf.predict_proba(Xn).astype(np.float32)}
     return scorer
 
 
@@ -340,6 +341,7 @@ def build_closr_knn(cfg, sp, dev):
         r = det.raw(Xn)
         return det.unified(r, "fam"), r["fam"][2]
     scorer.attack = det.attack
+    scorer.parts = det.parts
     return scorer
 
 
@@ -425,6 +427,7 @@ def build_hc_closr(cfg, sp, dev):
     scorer.extra = extra
     scorer.detector = det
     scorer.attack = det.attack
+    scorer.parts = det.parts
     return scorer
 
 
