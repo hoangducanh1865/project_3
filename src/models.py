@@ -393,6 +393,10 @@ def build_hc_closr(cfg, sp, dev):
         sel = tier_ood == 2
         pred_names = np.array(tac_names)[tac_ood]
         res["ood_tactic_acc_tier2"] = float((pred_names[sel] == true_tac[sel]).mean()) if sel.any() else None
+        # chiến thuật hệ thống thật sự báo: tầng 1 theo họ dự đoán, các tầng còn lại theo đầu chiến thuật
+        used = np.where(tier_ood == 1, np.array(fam_tac)[r_ood["fam"][2]], pred_names)
+        res["ood_tactic_acc"] = float((used == true_tac).mean())
+        res["ood_as_benign"] = float((used == "benign").mean())
         # ứng phó cho mỗi cảnh báo OOD bị phát hiện
         L = likelihood(f_ood, det.s_va["fam"])
         acts = [respond(t, p, l, m.impact) for t, p, l in zip(tier_ood, pred_names, L) if t > 1]

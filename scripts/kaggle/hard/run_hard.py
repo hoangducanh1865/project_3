@@ -73,7 +73,7 @@ PARTS = {
     "hc": {
         "a": (0, hard("hc_closr")),
         "b": (1, hard("closr")),
-        "p2": (1, [f"{p} model={m}" for m in P2_MODELS[2:] for p in P2]),
+        "uwf": (0, uwf(["hc_closr"])),
     },
     # UWF-ZeekData: giấu kỹ thuật, giấu chiến thuật, huấn luyện 2021-2024 và kiểm thử 2025
     "uwf": {
