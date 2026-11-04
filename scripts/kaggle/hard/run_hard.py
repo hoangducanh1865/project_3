@@ -8,7 +8,7 @@ import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | ablation
+PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | nf | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
@@ -16,6 +16,10 @@ TACTIC = ["impact", "credential_access", "initial_access"]
 P2 = ["protocol=p2", "dataset=lycos18 protocol=p2 protocol.target=lycos protocol.heldout=to17"]
 P2_MODELS = ["xgboost", "mlp_knn", "closr_knn", "hc_closr"]
 DROP = "'+protocol.drop_like=[hdr_len,tcp_init_win]'"
+NF_HELD = ["ddos", "dos_attack", "xss", "injection", "password", "scanning", "backdoor"]
+NF_DROP = "'protocol.drop_like=[TTL,TCP_WIN]'"
+NF_P2 = ["dataset=nf_ton protocol=p2 protocol.target=nf_cic protocol.heldout=to_cic",
+         "dataset=nf_cic protocol=p2 protocol.target=nf_ton protocol.heldout=to_ton"]
 
 
 def hard(model, protos=("pv", "pf"), extra=""):
@@ -35,6 +39,14 @@ def uwf(models):
     runs = [f"dataset=uwf protocol=p2 protocol.target=uwf25 protocol.heldout=to25"]
     runs += [f"dataset=uwf protocol=p1 protocol.heldout={t}" for t in ("t1018", "t1592", "t1595")]
     runs += [f"dataset=uwf protocol=p1t protocol.heldout={t}" for t in ("discovery", "reconnaissance")]
+    return [f"{r} model={m}" for m in models for r in runs]
+
+
+def nf(models, base=True, cross=True, pe=False):
+    """NF-ToN-IoT-v3: mọi họ có từ 10.000 flow, chéo mạng với NF-CICIDS2018-v3, và bản bỏ TTL, cửa sổ TCP."""
+    runs = [f"dataset=nf_ton protocol=p1 protocol.heldout={h}" for h in NF_HELD] if base else []
+    runs += NF_P2 if cross else []
+    runs += [f"dataset=nf_ton protocol=pe protocol.heldout={h} {NF_DROP}" for h in NF_HELD] if pe else []
     return [f"{r} model={m}" for m in models for r in runs]
 
 
@@ -93,6 +105,11 @@ PARTS = {
         "a": (0, [f"protocol=pe protocol.heldout={h} model={m}" for m in ("stump", "xgboost") for h in HELD]),
         "p2": (0, [f"{p} {DROP} model={m}" for m in ("stump", "xgboost") for p in P2]),
     },
+    # NetFlow v3: benign và tấn công thu xen kẽ, XGBoost tụt mạnh ở lượt sàng lọc khi giấu một họ
+    "nf": {
+        "nf": (0, nf(["stump", "xgboost", "mlp_knn"], pe=True) + nf(["hc_closr"])),
+        "nf2": (1, nf(["closr_knn", "closr"]) + nf(["hc_closr"], base=False, cross=False, pe=True)),
+    },
     # Đối chứng không có đầu chiến thuật, và embedding số ở P0, P1
     "ablation": {
         "a": (0, p1("closr_knn") + p1("mlp_ple_knn")),
@@ -108,6 +125,7 @@ def sh(cmd):
     subprocess.run(cmd, shell=True, check=True)
 
 
+PREP = {"uwf": f"python -m src.uwf {T}/uwf", "nf": f"python -m src.netflow /kaggle/input {T}/nf"}
 os.makedirs(T, exist_ok=True)
 sh(f"git clone -q -b {COMMIT} https://github.com/hoangducanh1865/project_3 {T}/project_3")
 os.chdir(f"{T}/project_3")
@@ -122,16 +140,16 @@ ready = threading.Event()
 
 def stream(name, gpu, runs):
     env = dict(os.environ, CUDA_VISIBLE_DEVICES=str(gpu), LYCOS_CSV=csv, LYCOS18_CSV=csv18,
-               UWF_DIR=f"{T}/uwf", CACHE_DIR=f"{T}/cache_{name}", OUT_ROOT=f"{W}/out", CLOSR_DIR=f"{T}/project_3/third_party/CLOSR",
+               UWF_DIR=f"{T}/uwf", NF_DIR=f"{T}/nf", CACHE_DIR=f"{T}/cache_{name}", OUT_ROOT=f"{W}/out", CLOSR_DIR=f"{T}/project_3/third_party/CLOSR",
                HYDRA_FULL_ERROR="1")
     os.makedirs(env["CACHE_DIR"], exist_ok=True)
     with open(f"{W}/{name}.log", "w") as log:
         if name == "p2" and not os.path.exists(csv18):
             subprocess.run(f"gdown {LYCOS18_ID} -O {csv18} && head -c 1500 {csv18}", shell=True, stdout=log, stderr=log)
-        if name == "uwf":
-            subprocess.run(f"python -m src.uwf {T}/uwf", shell=True, stdout=log, stderr=log)
+        if name in PREP:
+            subprocess.run(PREP[name], shell=True, stdout=log, stderr=log)
             ready.set()
-        elif name == "uwf2":
+        elif name in ("uwf2", "nf2"):
             ready.wait()
         for r in runs:
             log.write(f"\n===== {r}\n"); log.flush()
