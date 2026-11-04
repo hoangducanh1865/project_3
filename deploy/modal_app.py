@@ -6,6 +6,7 @@ Chạy từ thư mục gốc repo, dùng hồ sơ Modal đang đăng nhập:
   PYTHONPATH=. modal run deploy/modal_app.py::stream     # dựng kho flow và nạp kịch bản cho luồng giả lập
   modal volume put project3-model <thư mục> /hc_closr    # nạp HC-CLOSR đã huấn luyện (xem scripts/kaggle)
   PYTHONPATH=. modal deploy deploy/modal_app.py          # triển khai API
+  PYTHONPATH=. modal run deploy/modal_app.py::evaluate --hours 72 --out replay.json   # đánh giá tăng tốc
 """
 import json
 import os
@@ -125,6 +126,58 @@ def tick():
         store[k] = v
     store["sim"] = sim
     print(f"tick: {len(flows)} flow, mở {len(opened)} sự cố, {time.time() - t0:.1f} giây")
+
+
+@app.function(image=serve_image, cpu=4, memory=4096, timeout=3000, volumes={VOL: volume})
+def replay(hours: int):
+    """Chạy tăng tốc luồng giả lập để lấy số liệu đánh giá. Không ghi vào dữ liệu đang chạy trên web."""
+    from collections import Counter
+
+    import numpy as np
+    import torch
+    from src.hc_detector import HCDetector
+    from src.simulator import Simulator
+    from src.stream import step
+    torch.set_num_threads(4)
+    det = HCDetector.from_state(torch.load(f"{VOL}/hc_closr/model.pt", map_location="cpu", weights_only=False))
+    simulator = Simulator(np.load(f"{VOL}/stream/pool.npz", allow_pickle=False),
+                          json.load(open(f"{VOL}/stream/scenarios.json")))
+    start = int(time.time() // 60)
+    sim = {"count": 0, "next_start": start, "active": None}
+    state = {"series": [], "incidents": [], "recent": [], "campaigns": []}
+    flows_of, alerts_of, tiers = Counter(), Counter(), Counter()
+    incidents = {}
+    for minute in range(start, start + hours * 60):
+        before = sim.get("active")
+        X, flows, ended = simulator.tick(sim, minute, np.random.default_rng(minute))
+        if sim.get("active") and not before:
+            c = sim["active"]
+            state["campaigns"].append({k: c[k] for k in ("id", "name", "start", "scenario")})
+        results = det.analyze(X)
+        step(state, flows, results, minute, det.info["impact"], ended)
+        for inc in state["incidents"]:
+            incidents[inc["id"]] = inc
+        for f, r in zip(flows, results):
+            fam = f["truth"] or "benign"
+            flows_of[fam] += 1
+            if r["status"] == "alert":
+                alerts_of[fam] += 1
+                tiers[(fam, r["tier"])] += 1
+    done = [c for c in state["campaigns"] if c.get("end")]
+    return {
+        "hours": hours, "flows": sum(flows_of.values()), "alerts": sum(alerts_of.values()), "campaigns": done,
+        "by_family": {f: {"flows": n, "alerts": alerts_of[f], "tier1": tiers[(f, 1)], "tier2": tiers[(f, 2)],
+                          "tier3": tiers[(f, 3)]} for f, n in flows_of.items()},
+        "incidents": len(incidents), "false_incidents": sum(not i["truth"] for i in incidents.values()),
+        "levels": dict(Counter(i["level"] for i in incidents.values())),
+        "by_tier": {str(k): v for k, v in Counter(i["tier"] for i in incidents.values()).items()},
+    }
+
+
+@app.local_entrypoint()
+def evaluate(hours: int = 72, out: str = "replay.json"):
+    with open(out, "w") as f:
+        json.dump(replay.remote(hours), f, ensure_ascii=False, indent=1)
 
 
 @app.function(image=modal.Image.debian_slim(python_version="3.12").pip_install("fastapi[standard]"), cpu=0.25,
