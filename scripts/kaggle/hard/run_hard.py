@@ -1,6 +1,6 @@
 """Kernel Kaggle (2×T4): các giao thức khó (P1T, P2, P3, PS, PF, PV), embedding số, TabPFN và đối chứng CLOSR + KNN.
 Sửa PART rồi đẩy bằng: kaggle kernels push -p scripts/kaggle/hard
-Lấy kết quả: kaggle kernels output <user>/project3-hard -p <thư mục> --file-pattern '.*(log|result\.json)$'
+Lấy kết quả: kaggle kernels output <user>/project3-hard -p <thư mục> --file-pattern '.*(log|result[.]json)$'
 """
 import glob
 import os
@@ -8,7 +8,7 @@ import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "screen"   # smoke | screen | hc | ablation
+PART = "key"   # smoke | screen | key | hc | uwf | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
@@ -17,7 +17,7 @@ P2 = ["protocol=p2", "dataset=lycos18 protocol=p2 protocol.target=lycos protocol
 P2_MODELS = ["xgboost", "mlp_knn", "closr_knn", "hc_closr"]
 
 
-def hard(model, protos=("pv", "pf", "ps"), extra=""):
+def hard(model, protos=("pv", "pf"), extra=""):
     """Mọi kịch bản khó trên dữ liệu 2017 cho một mô hình."""
     runs = [f"protocol=p3 model={model} {extra}"]
     runs += [f"protocol=p1t protocol.heldout={t} model={model} {extra}" for t in TACTIC]
@@ -58,12 +58,18 @@ PARTS = {
     },
     # Sàng lọc nhanh: XGBoost và MLP + KNN trên mọi kịch bản, TabPFN ở nơi có ít nhãn
     "screen": {
-        "a": (0, hard("xgboost") + [f"protocol=ps protocol.heldout={h} model=tabpfn eval_cap=5000" for h in HELD]
-              + ["protocol=p3 model=tabpfn eval_cap=5000"]),
-        "b": (1, hard("mlp_knn")),
+        "a": (0, hard("xgboost", ("pv", "pf", "ps")) + ["protocol=p3 model=tabpfn eval_cap=5000"]
+              + [f"protocol=ps protocol.heldout={h} model=tabpfn eval_cap=5000" for h in HELD]),
+        "b": (1, hard("mlp_knn", ("pv", "pf", "ps"))),
         "p2": (0, [f"{p} model={m}" for m in P2_MODELS[:2] for p in P2]),
     },
-    # Mô hình đề xuất và CLOSR trên các kịch bản khó
+    # Hai kịch bản làm XGBoost tụt mạnh ở lượt sàng lọc: ít nhãn (PS) và chéo mạng (P2)
+    "key": {
+        "a": (0, [f"protocol=ps protocol.heldout={h} model={m}" for m in ("hc_closr", "closr_knn") for h in HELD]),
+        "b": (1, [f"protocol=ps protocol.heldout={h} model={m}" for m in ("closr", "hc_closr_ple") for h in HELD]),
+        "p2": (1, [f"{p} model={m}" for m in P2_MODELS[2:] + ["closr", "tabpfn eval_cap=5000"] for p in P2]),
+    },
+    # Mô hình đề xuất và CLOSR trên các kịch bản còn lại
     "hc": {
         "a": (0, hard("hc_closr")),
         "b": (1, hard("closr")),
