@@ -8,7 +8,7 @@ import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | pe_nn | nf | ablation
+PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | pe_nn | tab | nf | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
@@ -104,6 +104,13 @@ PARTS = {
     "pe": {
         "a": (0, [f"protocol=pe protocol.heldout={h} model={m}" for m in ("stump", "xgboost") for h in HELD]),
         "p2": (0, [f"{p} {DROP} model={m}" for m in ("stump", "xgboost") for p in P2]),
+    },
+    # TabPFN nhiều seed trên dữ liệu đã làm sạch; mạng nơ-ron chạy song song trên A100 bằng scripts/grid.py
+    "tab": {
+        "nf": (0, [r for s in range(3) for r in nf([f"tabpfn eval_cap=5000 seed={s}"])]),
+        "p2": (1, [f"{r} model=tabpfn eval_cap=5000 seed={s}" for s in range(3)
+                   for r in [f"protocol=pe protocol.heldout={h}" for h in HELD] + [f"{p} {DROP}" for p in P2]
+                   + [f"protocol=ps protocol.heldout={h}" for h in HELD]]),
     },
     "pe_nn": {
         "a": (0, [f"protocol=pe protocol.heldout={h} model={m}" for m in ("hc_closr", "closr_knn") for h in HELD]),
