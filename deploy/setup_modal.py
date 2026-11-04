@@ -17,3 +17,7 @@ if not vals.get("MODAL_API_KEY"):
 modal.Secret.objects.create("project3", {"HF_TOKEN": vals["HF_TOKEN"], "API_KEY": vals["MODAL_API_KEY"]},
                             allow_existing=True)
 print("đã tạo secret project3")
+if vals.get("TELEGRAM_BOT_TOKEN") and vals.get("TELEGRAM_CHAT_ID"):
+    modal.Secret.objects.create("project3-telegram", {k: vals[k] for k in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID")},
+                                allow_existing=True)
+    print("đã tạo secret project3-telegram")

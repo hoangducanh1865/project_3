@@ -14,6 +14,7 @@ MIN_ALERTS = 5      # số cảnh báo tối thiểu trong cửa sổ
 MIN_RATE = 0.3      # tỉ lệ cảnh báo tối thiểu trên số flow của cặp
 CLOSE_AFTER = 10    # phút không còn cảnh báo thì đóng sự cố
 KEEP_INCIDENTS, KEEP_SERIES, KEEP_CAMPAIGNS = 300, 1440, 200
+NOTIFY_LEVELS = ("M3", "M4")    # chỉ báo ra ngoài web từ mức này
 
 
 def empty_pair():
@@ -95,6 +96,21 @@ def update_incidents(incidents, recent, tick_pairs, minute, impact):
         if inc["status"] == "open" and minute * 60 - inc["last"] > CLOSE_AFTER * 60:
             inc["status"] = "closed"
     return opened
+
+
+def to_notify(incidents):
+    """Sự cố đang mở từ mức M3 chưa báo ra ngoài. Xét cả sự cố mở ở mức thấp rồi được nâng mức sau đó."""
+    return [i for i in incidents if i["status"] == "open" and i["level"] in NOTIFY_LEVELS and not i.get("notified")]
+
+
+def message(inc, tier_names, tactic_names, url):
+    """Nội dung tin báo của một sự cố."""
+    return (f"Phát hiện xâm nhập, mức {inc['level']} (dữ liệu mô phỏng)\n"
+            f"{inc['src']} → {inc['dst']}\n"
+            f"{tactic_names.get(inc['tactic'], inc['tactic'])}, tầng {inc['tier']}: {tier_names[inc['tier']]}\n"
+            f"Đề xuất: {inc['action']}\n"
+            f"Thực hiện: {inc['mode']}\n"
+            f"{url}")
 
 
 def summary(series, incidents, campaigns, minute):
