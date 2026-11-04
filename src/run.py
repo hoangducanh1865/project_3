@@ -10,7 +10,7 @@ import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
-from .data import class_table, cross_split, drop_top_features, load_columns, load_csv, load_ts, make_split
+from .data import class_table, cross_split, drop_named, drop_top_features, load_columns, load_csv, load_ts, make_split
 from .metrics import alert_metrics, attack_metrics, closed_metrics, detection_metrics
 from .models import BUILDERS, tactic_of
 from .variants import evaluate_variants
@@ -47,6 +47,9 @@ def main(cfg):
     dropped = []
     if proto.get("drop_top"):
         sp, cols, dropped = drop_top_features(sp, proto.drop_top, cols, cfg.seed, "cuda" if dev.type == "cuda" else "cpu")
+        log.info("bỏ đặc trưng: %s", dropped)
+    if proto.get("drop_like"):
+        sp, cols, dropped = drop_named(sp, proto.drop_like, cols)
         log.info("bỏ đặc trưng: %s", dropped)
     log.info("known=%s | OOD=%s | train=%d test=%d ood=%d", sp["classes"], sp["ood_classes"],
              len(sp["X_tr"]), len(sp["X_te"]), len(sp["X_ood"]))

@@ -8,13 +8,14 @@ import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "key"   # smoke | screen | key | hc | uwf | floor | ablation
+PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
 TACTIC = ["impact", "credential_access", "initial_access"]
 P2 = ["protocol=p2", "dataset=lycos18 protocol=p2 protocol.target=lycos protocol.heldout=to17"]
 P2_MODELS = ["xgboost", "mlp_knn", "closr_knn", "hc_closr"]
+DROP = "'+protocol.drop_like=[hdr_len,tcp_init_win]'"
 
 
 def hard(model, protos=("pv", "pf"), extra=""):
@@ -86,6 +87,11 @@ PARTS = {
               + [f"protocol=p1 protocol.heldout={h} model=xgboost" for h in ("slowloris", "ssh")]),
         "p2": (0, [f"{p} model=stump" for p in P2]),
         "uwf": (0, uwf(["stump"]) + [f"dataset=uwf protocol=p1 protocol.heldout={t} model=xgboost" for t in ("t1018", "t1592", "t1595")]),
+    },
+    # PE: bỏ dấu vết ngăn xếp TCP (đặc trưng mạnh nhất khi dùng một mình), trên P1 và P2. Chạy được trên CPU
+    "pe": {
+        "a": (0, [f"protocol=pe protocol.heldout={h} model={m}" for m in ("stump", "xgboost") for h in HELD]),
+        "p2": (0, [f"{p} {DROP} model={m}" for m in ("stump", "xgboost") for p in P2]),
     },
     # Đối chứng không có đầu chiến thuật, và embedding số ở P0, P1
     "ablation": {

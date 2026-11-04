@@ -152,7 +152,18 @@ def drop_top_features(sp, k, cols, seed, device):
     clf.fit(sp["X_tr"], sp["y_tr"])
     top = np.argsort(clf.feature_importances_)[::-1][:k]
     keep = np.setdiff1d(np.arange(sp["X_tr"].shape[1]), top)
+    return _select(sp, keep), [cols[i] for i in keep], [cols[i] for i in top]
+
+
+def drop_named(sp, parts, cols):
+    """PE: bỏ các cột có tên chứa một trong các chuỗi, dùng cho dấu vết ngăn xếp TCP của máy trong testbed."""
+    hit = [any(p in c for p in parts) for c in cols]
+    keep = np.flatnonzero(~np.array(hit))
+    return _select(sp, keep), [cols[i] for i in keep], [c for c, h in zip(cols, hit) if h]
+
+
+def _select(sp, keep):
     out = {**sp, "mu": sp["mu"][keep], "sd": sp["sd"][keep]}
     for key in ("X_tr", "X_va", "X_te", "X_ood"):
         out[key] = sp[key][:, keep]
-    return out, [cols[i] for i in keep], [cols[i] for i in top]
+    return out
