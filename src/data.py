@@ -17,15 +17,23 @@ def load_csv(ds):
         return z["X"], z["y"]
     df = pd.read_csv(ds.path)
     y = df.pop(ds.label_col).astype(str).to_numpy().astype(str)  # chuỗi độ dài cố định, lưu được vào npz
-    df = df.drop(columns=list(ds.drop_cols), errors="ignore")
-    X = df.select_dtypes("number").to_numpy(dtype=np.float32)
+    df = df.drop(columns=list(ds.drop_cols), errors="ignore").select_dtypes("number")
+    cols = df.columns.to_numpy().astype(str)
+    X = df.to_numpy(dtype=np.float32)
     del df
     ok = np.isfinite(X).all(axis=1)
     print(f"bỏ {(~ok).sum()} dòng có NaN/Inf trên tổng {len(ok)}")
     X, y = X[ok], y[ok]
-    X = X[:, X.std(axis=0) > 0]  # bỏ cột hằng
-    np.savez(ds.cache, X=X, y=y)
+    keep = X.std(axis=0) > 0  # bỏ cột hằng
+    X = X[:, keep]
+    np.savez(ds.cache, X=X, y=y, cols=cols[keep], rows=np.flatnonzero(ok))
     return X, y
+
+
+def load_columns(ds):
+    """Tên cột của X và vị trí từng dòng của X trong file CSV gốc (đọc từ cache do load_csv tạo)."""
+    z = np.load(ds.cache, allow_pickle=False)
+    return z["cols"].tolist(), z["rows"]
 
 
 def class_table(y):
@@ -83,4 +91,5 @@ def make_split(X, y, ds, proto, eval_cap, seed):
         "X_va": z(va), "X_te": z(te), "y_te": yk[te], "X_ood": z(ood),
         "classes": [names[i] for i in known],
         "ood_classes": [names[i] for i in ood_ids], "ood_names": names[inv[ood]],
+        "mu": mu, "sd": sd, "idx_te": te, "idx_ood": ood,
     }

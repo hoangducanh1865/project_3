@@ -27,7 +27,7 @@ def main(cfg):
     X, y = load_csv(cfg.dataset)
     log.info("lớp trong dữ liệu: %s", class_table(y))
     sp = make_split(X, y, cfg.dataset, cfg.protocol, cfg.eval_cap, cfg.seed)
-    del X, y
+    del X
     log.info("known=%s | OOD=%s | train=%d test=%d ood=%d", sp["classes"], sp["ood_classes"],
              len(sp["X_tr"]), len(sp["X_te"]), len(sp["X_ood"]))
 
@@ -53,6 +53,9 @@ def main(cfg):
     with open(out, "w") as f:
         json.dump(res, f, ensure_ascii=False, indent=2, default=str)
     log.info("%s", {k: v for k, v in res.items() if k not in ("config", "known_classes")})
+    if cfg.artifact_dir:
+        from .export import export
+        export(cfg, scorer, sp, y, res)
 
 
 if __name__ == "__main__":

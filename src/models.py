@@ -241,16 +241,12 @@ def tactic_of(name, tactics):
 
 
 def build_hc_closr(cfg, sp, dev):
-    """Encoder CLOSR [16] với hai nhóm đầu embedding: K đầu theo họ tấn công và T đầu theo chiến thuật.
-
-    Mỗi tầng: likelihood CLOSR (công thức eval_closr.py) và khoảng cách KNN tới láng giềng thứ k của lớp dự đoán
-    trên embedding của lớp đó [13]. Hai điểm được chuẩn hoá theo dữ liệu known (val) rồi cộng lại.
-    Tầng 1: không OOD ở mức họ. Tầng 2: OOD ở mức họ, không OOD ở mức chiến thuật và chiến thuật dự đoán là một
-    chiến thuật tấn công. Tầng 3: còn lại.
-    """
+    """Encoder CLOSR [16] với hai nhóm đầu embedding: K đầu theo họ tấn công và T đầu theo chiến thuật."""
     _repo()
     from losses.closr_loss import CLOSRLoss
     from model.model import CLOSRMLP
+    from omegaconf import OmegaConf
+    from .hc_detector import HCDetector
     from .response import likelihood, respond
     m = cfg.model
     K = len(sp["classes"])
@@ -260,84 +256,35 @@ def build_hc_closr(cfg, sp, dev):
     f2t = torch.as_tensor([tac_names.index(t) for t in fam_tac], device=dev)
     print(f"  chiến thuật đã biết: {dict(zip(sp['classes'], fam_tac))}", flush=True)
 
-    model = CLOSRMLP(d_in=sp["X_tr"].shape[1], n_classes=K + T, d_out=m.d_out, neurons=list(m.neurons),
+    d_in = sp["X_tr"].shape[1]
+    model = CLOSRMLP(d_in=d_in, n_classes=K + T, d_out=m.d_out, neurons=list(m.neurons),
                      dropout=m.dropout, residual=False).to(dev)
     fam_loss = CLOSRLoss(m=m.margin, squared=True, n_classes=K)
     tac_loss = CLOSRLoss(m=m.margin, squared=True, n_classes=T)
     crit = lambda x, y: fam_loss(x=x[:, :K], y=y) + m.tactic_weight * tac_loss(x=x[:, K:], y=f2t[y])
     _train_contrastive(model, crit, sp, m, dev)
 
-    @torch.no_grad()
-    def embed(Xn):
-        return torch.cat([F.normalize(model(_t(Xn[s], dev)), dim=-1) for s in _chunks(len(Xn), 4096)])
-
-    # tâm và chỉ mục KNN của từng lớp, trên embedding riêng của lớp đó
-    rng = np.random.default_rng(cfg.seed)
-    ytr = sp["y_tr"]
-    levels = []
-    for heads, lab in ((slice(0, K), ytr), (slice(K, K + T), f2t.cpu().numpy()[ytr])):
-        n = heads.stop - heads.start
-        cents, index = [], []
-        for c in range(n):
-            idx = rng.permutation(np.flatnonzero(lab == c))[: m.index_per_class]
-            e = embed(sp["X_tr"][idx])[:, heads.start + c]
-            cents.append(F.normalize(e.mean(0), dim=-1))
-            index.append(e)
-        levels.append((heads, torch.stack(cents), index))
-
-    @torch.no_grad()
-    def raw(Xn):
-        """-> {tầng: (điểm CLOSR, điểm KNN, lớp dự đoán)}, điểm cao là bất thường hơn."""
-        out = {}
-        e_all = embed(Xn)
-        for name, (heads, cents, index) in zip(("fam", "tac"), levels):
-            e = e_all[:, heads]
-            sims = (e * cents[None]).sum(-1)
-            osr = (sims ** 2 * sims.softmax(-1)).sum(-1)
-            pred = sims.argmax(-1)
-            knn = torch.zeros(len(Xn), device=dev)
-            for c in range(len(index)):
-                rows = torch.nonzero(pred == c).squeeze(1)
-                k = min(m.k, len(index[c]))
-                for s in _chunks(len(rows), 4096):
-                    r = rows[s]
-                    d = 1 - e[r, c] @ index[c].T
-                    knn[r] = d.topk(k, largest=False).values[:, -1]
-            out[name] = ((-osr).cpu().numpy(), knn.cpu().numpy(), pred.cpu().numpy())
-        return out
-
-    # chuẩn hoá và ngưỡng chỉ từ dữ liệu known (val)
-    r_va = raw(sp["X_va"])
-    stats = {lv: [(a.mean(), a.std() + 1e-12) for a in r_va[lv][:2]] for lv in r_va}
-
-    def unified(r, lv):
-        (m1, s1), (m2, s2) = stats[lv]
-        return (r[lv][0] - m1) / s1 + (r[lv][1] - m2) / s2
-
-    s_va = {lv: unified(r_va, lv) for lv in r_va}
-    thr = {lv: np.quantile(s_va[lv], m.quantile) for lv in s_va}
+    det = HCDetector.fit(model, sp, f2t.cpu().numpy(), K, T, m, cfg.seed, dev)
+    det.info = {
+        "arch": {"d_in": d_in, "n_heads": K + T, "d_out": m.d_out, "neurons": list(m.neurons), "dropout": m.dropout},
+        "classes": [str(c) for c in sp["classes"]], "fam_tac": fam_tac, "tac_names": tac_names,
+        "impact": OmegaConf.to_container(m.impact), "mu": sp["mu"], "sd": sp["sd"],
+    }
 
     def scorer(Xn):
-        r = raw(Xn)
-        return unified(r, "fam"), r["fam"][2]
-
-    def tiers(Xn):
-        r = raw(Xn)
-        f, t = unified(r, "fam"), unified(r, "tac")
-        tac_pred = r["tac"][2]
-        tier = np.where(f <= thr["fam"], 1, np.where((t <= thr["tac"]) & (tac_pred != 0), 2, 3))
-        return r, f, tier, tac_pred
+        r = det.raw(Xn)
+        return det.unified(r, "fam"), r["fam"][2]
 
     def extra(sp_):
         """Độ đo riêng của HC-CLOSR: AUROC từng thành phần, phân tầng, chiến thuật và mức ứng phó trên OOD."""
         from sklearn.metrics import roc_auc_score
-        r_kn, f_kn, tier_kn, _ = tiers(sp_["X_te"])
-        r_ood, f_ood, tier_ood, tac_ood = tiers(sp_["X_ood"])
+        r_kn, f_kn, tier_kn, _ = det.tiers(sp_["X_te"])
+        r_ood, f_ood, tier_ood, tac_ood = det.tiers(sp_["X_ood"])
         y = np.r_[np.zeros(len(f_kn)), np.ones(len(f_ood))]
         auc = lambda a, b: float(roc_auc_score(y, np.r_[a, b]))
         res = {"auroc_closr_only": auc(r_kn["fam"][0], r_ood["fam"][0]),
                "auroc_knn_only": auc(r_kn["fam"][1], r_ood["fam"][1]),
-               "auroc_tactic_level": auc(unified(r_kn, "tac"), unified(r_ood, "tac")),
+               "auroc_tactic_level": auc(det.unified(r_kn, "tac"), det.unified(r_ood, "tac")),
                "tier1_known": float((tier_kn == 1).mean())}
         # tầng đúng của OOD: 2 nếu chiến thuật thật còn trong tập huấn luyện, ngược lại 3
         true_tac = np.array([tactic_of(c, cfg.dataset.tactics) for c in sp_["ood_names"]])
@@ -350,7 +297,7 @@ def build_hc_closr(cfg, sp, dev):
         pred_names = np.array(tac_names)[tac_ood]
         res["ood_tactic_acc_tier2"] = float((pred_names[sel] == true_tac[sel]).mean()) if sel.any() else None
         # ứng phó cho mỗi cảnh báo OOD bị phát hiện
-        L = likelihood(f_ood, s_va["fam"])
+        L = likelihood(f_ood, det.s_va["fam"])
         acts = [respond(t, p, l, m.impact) for t, p, l in zip(tier_ood, pred_names, L) if t > 1]
         lv, cnt = np.unique([a["level"] for a in acts], return_counts=True) if acts else ([], [])
         res["ood_response_levels"] = dict(zip(map(str, lv), map(int, cnt)))
@@ -358,6 +305,7 @@ def build_hc_closr(cfg, sp, dev):
         return res
 
     scorer.extra = extra
+    scorer.detector = det
     return scorer
 
 

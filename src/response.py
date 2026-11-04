@@ -35,6 +35,11 @@ D3FEND = {
 GENERIC = (["Network Traffic Filtering có thời hạn", "lưu bằng chứng"], [])
 
 
+# L của tấn công đã biết (tầng 1): điểm OOD thấp ở đây nghĩa là mô hình nhận ra họ tấn công, không phải khả năng xảy ra
+# thấp, nên L không lấy từ điểm OOD mà cố định. Giá trị này là quy tắc thiết kế, cần đối chiếu chuyên gia.
+L_KNOWN = 4
+
+
 def likelihood(score, val_scores):
     """L từ 1 đến 5 theo vị trí của điểm OOD so với dữ liệu known (val). Chưa dùng tần suất cảnh báo."""
     q = np.quantile(val_scores, [0.95, 0.99, 0.999, 1.0])

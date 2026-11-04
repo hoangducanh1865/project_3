@@ -10,6 +10,7 @@ defaults:
 seed: 0
 device: auto      # auto | cuda | cpu
 eval_cap: 50000   # số mẫu tối đa dùng để đo: known-test, val và OOD
+artifact_dir: null  # nếu đặt: xuất mô hình và lưu lượng mẫu cho web vào thư mục này (chỉ model=hc_closr)
 
 # Kết quả ghi ra Google Drive (đặt OUT_ROOT), không ghi vào repo.
 out_root: ${oc.env:OUT_ROOT,outputs}

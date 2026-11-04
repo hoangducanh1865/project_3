@@ -1,13 +1,14 @@
-"""Kernel Kaggle (2x T4): chạy HC-CLOSR, mỗi GPU một dãy lần chạy. Đẩy bằng: kaggle kernels push -p scripts/kaggle
-Kết quả ở /kaggle/working/out, lấy về bằng: kaggle kernels output <user>/project3-hc-closr -p <thư mục>
+"""Kernel Kaggle (T4): huấn luyện HC-CLOSR và xuất mô hình cho web. Đẩy bằng: kaggle kernels push -p scripts/kaggle
+Kết quả ở /kaggle/working/out, mô hình ở /kaggle/working/artifact.
+Lấy về bằng: kaggle kernels output <user>/project3-hc-closr -p <thư mục>
 """
 import glob
 import os
 import subprocess
 
 COMMIT = "main"
-JOBS = {0: ["protocol=p0", "protocol=p1 protocol.heldout=slowloris"],
-        1: ["protocol=p1 protocol.heldout=ssh", "protocol=p1 protocol.heldout=bot"]}
+# Slowloris: kịch bản duy nhất ở P1 có đủ cả 3 tầng. Cùng cấu hình và seed với số đã báo cáo (AUROC 0,944).
+JOBS = {0: ["protocol=p1 protocol.heldout=slowloris artifact_dir=/kaggle/working/artifact"]}
 
 
 def sh(cmd, **kw):
