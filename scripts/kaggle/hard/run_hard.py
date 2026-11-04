@@ -8,7 +8,7 @@ import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | nf | ablation
+PART = "key"   # smoke | screen | key | hc | uwf | floor | pe | pe_nn | nf | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
@@ -104,6 +104,10 @@ PARTS = {
     "pe": {
         "a": (0, [f"protocol=pe protocol.heldout={h} model={m}" for m in ("stump", "xgboost") for h in HELD]),
         "p2": (0, [f"{p} {DROP} model={m}" for m in ("stump", "xgboost") for p in P2]),
+    },
+    "pe_nn": {
+        "a": (0, [f"protocol=pe protocol.heldout={h} model={m}" for m in ("hc_closr", "closr_knn") for h in HELD]),
+        "p2": (1, [f"{p} {DROP} model={m}" for m in ("hc_closr", "closr_knn", "mlp_knn") for p in P2]),
     },
     # NetFlow v3: benign và tấn công thu xen kẽ, XGBoost tụt mạnh ở lượt sàng lọc khi giấu một họ
     "nf": {
