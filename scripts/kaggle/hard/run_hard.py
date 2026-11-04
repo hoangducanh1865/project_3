@@ -1,15 +1,14 @@
 """Kernel Kaggle (2×T4): các giao thức khó (P1T, P2, P3, PS, PF, PV), embedding số, TabPFN và đối chứng CLOSR + KNN.
 Sửa PART rồi đẩy bằng: kaggle kernels push -p scripts/kaggle/hard
-Lấy kết quả: kaggle kernels output <user>/project3-hard -p <thư mục>
+Lấy kết quả: kaggle kernels output <user>/project3-hard -p <thư mục> --file-pattern '.*(log|result\.json)$'
 """
 import glob
 import os
-import shutil
 import subprocess
 import threading
 
 COMMIT = "exp/hard-benchmarks"
-PART = "smoke"   # smoke | screen | hc | ablation
+PART = "screen"   # smoke | screen | hc | ablation
 LYCOS18_ID = "12dQPcqRDJFeJGmqqshzdYN8M5t5tMXbQ"
 
 HELD = ["slowloris", "ssh", "bot", "portscan"]
@@ -124,8 +123,6 @@ def stream(name, gpu, runs):
 threads = [threading.Thread(target=stream, args=(n, g, r)) for n, (g, r) in PARTS[PART].items()]
 [t.start() for t in threads]
 [t.join() for t in threads]
-if os.path.exists(f"{T}/cache_p2/lycos18_cache.npz"):
-    shutil.copy(f"{T}/cache_p2/lycos18_cache.npz", W)     # bản đã rút gọn, dùng lại cho các lần sau
 for n in PARTS[PART]:
     text = open(f"{W}/{n}.log").read()
     print(f"######## {n}\n", "\n".join(l for l in text.splitlines() if l.startswith("=====")), "\n", text[-1500:])
