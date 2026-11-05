@@ -63,7 +63,7 @@ def tactics_of(r):
     return OmegaConf.create(OmegaConf.to_container(t) if OmegaConf.is_config(t) else t)
 
 
-def tactic_rows(r, z, zx):
+def tactic_rows(r, z, zx, zc=None):
     """Độ chính xác chiến thuật trên các flow OOD có chiến thuật còn trong tập huấn luyện, buộc phải chọn chiến thuật tấn công."""
     src = r["config"]["dataset"]["tactics"]
     fam = np.array([tactic_of(c, src) for c in z["classes"]])
@@ -81,6 +81,8 @@ def tactic_rows(r, z, zx):
            "nb.KNN họ": acc(fam[1 + z["ood_knn_fam"][:, 1:].argmin(1)])}
     if zx is not None:
         out["xgb"] = acc(fam[1 + zx["ood_proba"][:, 1:].argmax(1)])
+    if zc is not None:      # CLOSR không có đầu chiến thuật: suy từ họ gần nhất
+        out["closr"] = acc(fam[1 + zc["ood_sim_fam"][:, 1:].argmax(1)])
     return out
 
 
@@ -108,7 +110,11 @@ def main(root, neural="hc_closr"):
             if n in ms:
                 za = np.load(ms[n][1])
                 table[key][n] = report(*split(za, lambda a: za[f"{a}_attack"]))
-        tact[key] = tactic_rows(r, z, zx)
+        zc = None
+        if "closr" in ms:
+            zc = np.load(ms["closr"][1])
+            table[key]["closr"] = report(*split(zc, lambda a: -zc[f"{a}_sim_fam"][:, 0]))
+        tact[key] = tactic_rows(r, z, zx, zc)
 
     with open(os.path.join(root, "..", "fuse.json"), "w") as f:
         json.dump({"table": [[list(map(str, k)), v] for k, v in table.items()],

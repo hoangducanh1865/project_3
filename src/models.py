@@ -343,7 +343,13 @@ def build_closr(cfg, sp, dev):
     def attack(Xn):
         return -torch.cat([F.normalize(model(_t(Xn[s], dev))[:, 0], dim=-1) @ centroids[0]
                            for s in _chunks(len(Xn))]).cpu().numpy()
+
+    @torch.no_grad()
+    def parts(Xn):
+        return {"sim_fam": torch.cat([(F.normalize(model(_t(Xn[s], dev)), dim=-1) * centroids[None]).sum(-1)
+                                      for s in _chunks(len(Xn))]).cpu().numpy()}
     scorer.attack = attack
+    scorer.parts = parts
     return scorer
 
 
