@@ -1,4 +1,8 @@
-"""Chạy một baseline trên một giao thức. Dùng: python -m src.run protocol=p1 protocol.heldout=slowloris model=closr"""
+"""Chạy một mô hình trên một kịch bản. Ví dụ:
+
+python -m src.run dataset=nf_ton protocol.heldout=ddos model=hc_closr
+python -m src.run dataset=nf_ton protocol=cross protocol.target=nf_cic model=xgboost
+"""
 import json
 import logging
 import os
@@ -10,12 +14,41 @@ import torch
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import OmegaConf
 
-from .data import class_table, cross_split, drop_named, drop_top_features, load_columns, load_csv, load_ts, make_split
-from .metrics import alert_metrics, attack_metrics, closed_metrics, detection_metrics
-from .models import BUILDERS, tactic_of
-from .variants import evaluate_variants
+from .data import class_table, cross_split, drop_named, load_columns, load_csv, make_split, tactic_of
+from .metrics import attack_metrics, closed_metrics, detection_metrics, tactic_accuracy
+from .models import BUILDERS
 
 log = logging.getLogger(__name__)
+
+
+def load_scenario(cfg):
+    """-> (phép tách, nhãn gốc, các đặc trưng đã bỏ). Mọi số liệu đều đo trên phép tách này."""
+    proto = cfg.protocol
+    X, y = load_csv(cfg.dataset)
+    log.info("lớp trong dữ liệu: %s", class_table(y))
+    cols, _ = load_columns(cfg.dataset)
+    tactics = cfg.dataset.tactics
+    if proto.name == "cross":
+        dt = OmegaConf.load(os.path.join(os.path.dirname(__file__), "..", "conf", "dataset", f"{proto.target}.yaml"))
+        Xt, yt = load_csv(dt)
+        cols_t, _ = load_columns(dt)
+        common = [c for c in cols if c in cols_t]
+        log.info("%d cột chung, thiếu ở đích: %s", len(common), sorted(set(cols) - set(common)))
+        X, Xt = X[:, [cols.index(c) for c in common]], Xt[:, [cols_t.index(c) for c in common]]
+        cols, tactics = common, dt.tactics
+        sp = make_split(X, y, cfg.dataset, proto, cfg.eval_cap, cfg.seed)
+        sp = cross_split(sp, Xt, yt, dt, cfg.eval_cap, proto.per_class, cfg.seed, proto.get("align"))
+    else:
+        sp = make_split(X, y, cfg.dataset, proto, cfg.eval_cap, cfg.seed)
+    dropped = []
+    if cfg.clean:
+        sp, cols, dropped = drop_named(sp, cfg.dataset.stack_features, cols)
+        log.info("bỏ đặc trưng: %s", dropped)
+    sp["cols"] = cols
+    sp["ood_tactics"] = np.array([tactic_of(c, tactics) for c in sp["ood_names"]])
+    log.info("known=%s | OOD=%s | train=%d test=%d ood=%d", sp["classes"], sp["ood_classes"],
+             len(sp["X_tr"]), len(sp["X_te"]), len(sp["X_ood"]))
+    return sp, y, dropped
 
 
 @hydra.main(version_base="1.3", config_path="../conf", config_name="config")
@@ -24,76 +57,36 @@ def main(cfg):
                        "cpu" if cfg.device == "auto" else cfg.device)
     torch.manual_seed(cfg.seed)
     np.random.seed(cfg.seed)
+    sp, y, dropped = load_scenario(cfg)
 
-    X, y = load_csv(cfg.dataset)
-    log.info("lớp trong dữ liệu: %s", class_table(y))
-    cols, _ = load_columns(cfg.dataset)
-    proto = cfg.protocol
-    ts = load_ts(cfg.dataset) if proto.name == "p3" else None
-    if proto.name == "p2":
-        dt = OmegaConf.load(os.path.join(os.path.dirname(__file__), "..", "conf", "dataset", f"{proto.target}.yaml"))
-        Xt, yt = load_csv(dt)
-        cols_t, _ = load_columns(dt)
-        common = [c for c in cols if c in cols_t]
-        log.info("P2: %d cột chung, thiếu ở đích: %s", len(common), sorted(set(cols) - set(common)))
-        X, Xt = X[:, [cols.index(c) for c in common]], Xt[:, [cols_t.index(c) for c in common]]
-        cols = common
-    sp = make_split(X, y, cfg.dataset, proto, cfg.eval_cap, cfg.seed, ts)
-    del X
-    if proto.name == "p2":
-        log.info("lớp ở mạng đích: %s", class_table(yt))
-        sp = cross_split(sp, Xt, yt, dt, cfg.eval_cap, proto.per_class, cfg.seed, proto.get("align"))
-        del Xt
-    dropped = []
-    if proto.get("drop_top"):
-        sp, cols, dropped = drop_top_features(sp, proto.drop_top, cols, cfg.seed, "cuda" if dev.type == "cuda" else "cpu")
-        log.info("bỏ đặc trưng: %s", dropped)
-    if proto.get("drop_like"):
-        sp, cols, dropped = drop_named(sp, proto.drop_like, cols)
-        log.info("bỏ đặc trưng: %s", dropped)
-    log.info("known=%s | OOD=%s | train=%d test=%d ood=%d", sp["classes"], sp["ood_classes"],
-             len(sp["X_tr"]), len(sp["X_te"]), len(sp["X_ood"]))
-
-    sp["cols"] = cols
     t0 = time.time()
     scorer = BUILDERS[cfg.model.kind](cfg, sp, dev)
     fit_s = time.time() - t0
 
     s_va, _ = scorer(sp["X_va"])
     s_kn, pred = scorer(sp["X_te"])
-    s_ood, pred_ood = scorer(sp["X_ood"])
+    s_ood, _ = scorer(sp["X_ood"])
+    benign_te, benign_va = sp["X_te"][sp["y_te"] == 0], sp["X_va"][sp["y_va"] == 0]
     res = {
-        "protocol": cfg.protocol.name, "heldout": cfg.protocol.get("heldout"),
+        "dataset": cfg.dataset.name, "protocol": cfg.protocol.name, "heldout": cfg.protocol.get("heldout"),
+        "target": cfg.protocol.get("target"), "align": cfg.protocol.get("align"),
         "model": cfg.model.name, "seed": cfg.seed, "device": str(dev),
         "n_train": len(sp["X_tr"]), "n_known_test": len(sp["X_te"]), "n_ood": len(sp["X_ood"]),
-        "known_classes": sp["classes"], "ood_classes": sp["ood_classes"],
+        "known_classes": sp["classes"], "ood_classes": sp["ood_classes"], "dropped_features": dropped,
         "fit_seconds": round(fit_s, 1),
         **detection_metrics(s_kn, s_ood, s_va),
         **(closed_metrics(sp["y_te"], pred) if pred is not None else {}),
-        **(alert_metrics(s_kn, pred, sp["y_te"], s_ood, pred_ood, s_va) if pred is not None else {}),
-        **(attack_metrics(scorer.attack(sp["X_te"][sp["y_te"] == 0]), scorer.attack(sp["X_ood"]),
-                          scorer.attack(sp["X_va"][sp["y_va"] == 0])) if hasattr(scorer, "attack") else {}),
+        **attack_metrics(scorer.attack(benign_te), scorer.attack(sp["X_ood"]), scorer.attack(benign_va)),
         **(scorer.extra(sp) if hasattr(scorer, "extra") else {}),
-        **({"variants": evaluate_variants(scorer, sp, cols, s_va, proto.variants)} if proto.get("variants") else {}),
-        "dropped_features": dropped,
         "config": OmegaConf.to_container(cfg, resolve=True),
     }
-    if pred_ood is not None and cfg.dataset.get("tactics") and len(sp["ood_names"]):
-        # chiến thuật suy từ họ dự đoán: đối chứng cho đầu chiến thuật của HC-CLOSR, dùng được với mọi mô hình
-        fam_tac = np.array([tactic_of(c, cfg.dataset.tactics) for c in sp["classes"]])
-        true_tac = np.array([tactic_of(c, cfg.dataset.tactics) for c in sp["ood_names"]])
-        res["ood_tactic_by_family"] = float((fam_tac[pred_ood] == true_tac).mean())
-    out = os.path.join(HydraConfig.get().runtime.output_dir, "result.json")
-    with open(out, "w") as f:
+    if hasattr(scorer, "tactic"):
+        known = sorted({tactic_of(c, cfg.dataset.tactics) for c in sp["classes"]} - {"benign"})
+        res["tactic_acc"] = tactic_accuracy(scorer.tactic(sp["X_ood"]), sp["ood_tactics"], known)
+
+    with open(os.path.join(HydraConfig.get().runtime.output_dir, "result.json"), "w") as f:
         json.dump(res, f, ensure_ascii=False, indent=2, default=str)
     log.info("%s", {k: v for k, v in res.items() if k not in ("config", "known_classes")})
-    if hasattr(scorer, "parts"):
-        # điểm từng flow, để thử quy tắc kết hợp và hiệu chỉnh ngưỡng mà không phải huấn luyện lại
-        parts = {f"{a}_{k}": v for a, Xa in (("va", sp["X_va"]), ("te", sp["X_te"]), ("ood", sp["X_ood"]))
-                 for k, v in scorer.parts(Xa).items()}
-        np.savez_compressed(os.path.join(HydraConfig.get().runtime.output_dir, "scores.npz"), y_va=sp["y_va"],
-                            y_te=sp["y_te"], ood_names=np.array(sp["ood_names"], dtype=str),
-                            classes=np.array(sp["classes"], dtype=str), **parts)
     if cfg.artifact_dir:
         from .export import export
         export(cfg, scorer, sp, y, res)

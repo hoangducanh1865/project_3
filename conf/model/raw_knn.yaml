@@ -1,4 +1,4 @@
-# KNN trên đặc trưng đã chuẩn hoá, không qua encoder: đối chứng để tách đóng góp của biểu diễn học được.
+# KNN trên đặc trưng gốc đã chuẩn hoá, không qua encoder.
 name: raw_knn
 kind: raw_knn
 k: 25

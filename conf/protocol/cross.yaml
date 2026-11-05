@@ -1,0 +1,6 @@
+# Chéo tập dữ liệu: huấn luyện trên dataset, kiểm thử trên target.
+# Tuỳ chọn +protocol.align=z hoặc quantile: hiệu chỉnh bằng flow không nhãn của mạng đích.
+name: cross
+heldout: null
+target: ???
+per_class: 5000   # số mẫu tấn công tối đa mỗi lớp ở mạng đích

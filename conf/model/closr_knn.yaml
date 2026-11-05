@@ -1,4 +1,4 @@
-# CLOSR + KNN, không có đầu chiến thuật: đối chứng của HC-CLOSR, cùng encoder và ngân sách huấn luyện.
+# Ablation của HC-CLOSR: bỏ đầu chiến thuật, giữ encoder, điểm số và ngân sách huấn luyện.
 defaults:
   - hc_closr
   - _self_

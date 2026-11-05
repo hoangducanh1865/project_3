@@ -30,23 +30,12 @@ def closed_metrics(y_true, y_pred):
     }
 
 
-def alert_metrics(s_known, pred_known, y_known, s_ood, pred_ood, s_val):
-    """Góc nhìn vận hành: flow gây cảnh báo khi điểm OOD vượt ngưỡng hoặc mô hình xếp vào một lớp tấn công đã biết.
-
-    - alert_rate: tỉ lệ flow OOD gây cảnh báo. - fpr_alert: tỉ lệ flow bình thường gây cảnh báo.
-    - auroc_benign: AUROC của điểm OOD khi chỉ so OOD với flow bình thường.
-    """
-    thr = np.quantile(s_val, 0.95)
-    ben = y_known == 0
-    alert = lambda s, p: (s > thr) | (p != 0)
-    y = np.r_[np.zeros(ben.sum()), np.ones(len(s_ood))]
-    return {
-        "alert_rate": float(alert(s_ood, pred_ood).mean()),
-        "fpr_alert": float(alert(s_known[ben], pred_known[ben]).mean()),
-        "auroc_benign": float(roc_auc_score(y, np.r_[s_known[ben], s_ood])),
-    }
-
-
 def attack_metrics(a_benign, a_ood, a_val_benign):
     """Điểm tấn công so với flow bình thường (bài toán nhị phân), ngưỡng là phân vị 95 của flow bình thường ở val."""
     return {f"atk_{k}": v for k, v in detection_metrics(a_benign, a_ood, a_val_benign).items()}
+
+
+def tactic_accuracy(pred, true, known):
+    """Tỉ lệ flow OOD được gán đúng chiến thuật, chỉ tính các flow có chiến thuật thật còn trong tập huấn luyện."""
+    keep = np.isin(true, known)
+    return float((pred[keep] == true[keep]).mean()) if keep.any() else None

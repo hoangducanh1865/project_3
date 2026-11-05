@@ -1,15 +1,15 @@
-# Cấu hình thực nghiệm baseline OOD (Hydra). Chạy từ thư mục gốc repo:
-#   python -m src.run protocol=p0 model=mlp_msp
-#   python -m src.run -m protocol=p1 protocol.heldout=slowloris,portscan model=mlp_msp,xgboost
+# Cấu hình thực nghiệm (Hydra). Chạy từ thư mục gốc repo, ví dụ:
+#   python -m src.run dataset=nf_ton protocol.heldout=ddos model=hc_closr
 defaults:
   - dataset: lycos
-  - protocol: p1
-  - model: mlp_msp
+  - protocol: heldout
+  - model: hc_closr
   - _self_
 
 seed: 0
-device: auto      # auto | cuda | cpu
-eval_cap: 50000   # số mẫu tối đa dùng để đo: known-test, val và OOD
+device: auto        # auto | cuda | cpu
+eval_cap: 50000     # số mẫu tối đa dùng để đo: known-test, val và OOD
+clean: true         # bỏ các đặc trưng phụ thuộc ngăn xếp TCP (dataset.stack_features)
 artifact_dir: null  # nếu đặt: xuất mô hình và lưu lượng mẫu cho web vào thư mục này (chỉ model=hc_closr)
 
 # Kết quả ghi ra Google Drive (đặt OUT_ROOT), không ghi vào repo.
@@ -17,7 +17,4 @@ out_root: ${oc.env:OUT_ROOT,outputs}
 
 hydra:
   run:
-    dir: ${out_root}/runs/${protocol.name}_${protocol.heldout}_${model.name}_${now:%Y%m%d_%H%M%S}
-  sweep:
-    dir: ${out_root}/multirun/${now:%Y%m%d_%H%M%S}
-    subdir: ${hydra.job.num}_${protocol.name}_${model.name}_${protocol.heldout}   # có tên để hai sweep cùng giây không ghi đè nhau
+    dir: ${out_root}/runs/${dataset.name}_${protocol.name}_${protocol.heldout}_${model.name}_${seed}_${now:%Y%m%d_%H%M%S}

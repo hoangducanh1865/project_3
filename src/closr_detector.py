@@ -12,7 +12,8 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 
-from .models import _chunks, _repo, _t, tactic_of
+from .common import chunks, tensor, use_closr_repo
+from .data import tactic_of
 from .response import L_KNOWN, likelihood, respond
 
 DROP = ["flow_id", "src_addr", "src_port", "dst_addr", "dst_port", "ip_prot", "timestamp"]
@@ -22,7 +23,7 @@ ARCH = {"d_in": 72, "n_heads": 12, "d_out": 64, "neurons": [1024, 1024, 1024], "
 
 
 def make_model(dev):
-    _repo()
+    use_closr_repo()
     from model.model import CLOSRMLP
     return CLOSRMLP(d_in=ARCH["d_in"], n_classes=ARCH["n_heads"], d_out=ARCH["d_out"], neurons=ARCH["neurons"],
                     dropout=ARCH["dropout"], residual=False).to(dev)
@@ -37,8 +38,8 @@ class CLOSRDetector:
     @torch.no_grad()
     def score(self, Xz):
         """-> (điểm OOD, lớp dự đoán). Công thức open-set của eval_closr.py, điểm cao là bất thường hơn."""
-        sims = torch.cat([(F.normalize(self.model(_t(Xz[s], self.dev)), dim=-1) * self.cents[None]).sum(-1)
-                          for s in _chunks(len(Xz), 4096)])
+        sims = torch.cat([(F.normalize(self.model(tensor(Xz[s], self.dev)), dim=-1) * self.cents[None]).sum(-1)
+                          for s in chunks(len(Xz), 4096)])
         osr = (sims ** 2 * sims.softmax(-1)).sum(-1)
         return (-osr).cpu().numpy(), sims.argmax(-1).cpu().numpy()
 
@@ -103,11 +104,11 @@ def build(csv, weights, out_dir, tactics, impact, dev, seed=0, n_benign=200, n_k
     model.eval()
 
     # tâm lớp như util/distance.py: trung bình các embedding đã chuẩn hoá trên đầu của chính lớp đó
-    ztr, ytr = z(tr), _t(np.array([lookup[c] for c in y[tr]]), dev)
+    ztr, ytr = z(tr), tensor(np.array([lookup[c] for c in y[tr]]), dev)
     sums = torch.zeros(ARCH["n_heads"], ARCH["d_out"], device=dev)
     with torch.no_grad():
-        for s in _chunks(len(ztr), 4096):
-            e, yb = model(_t(ztr[s], dev)), ytr[s]
+        for s in chunks(len(ztr), 4096):
+            e, yb = model(tensor(ztr[s], dev)), ytr[s]
             for c in range(ARCH["n_heads"]):
                 sums[c] += F.normalize(e[yb == c, c], dim=-1).sum(0)
     cents = F.normalize(sums, dim=-1)

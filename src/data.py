@@ -1,4 +1,4 @@
-"""Nạp dữ liệu và tách theo giao thức: P0, P1, P1T (giấu chiến thuật), P2 (chéo mạng), P3 (theo thời gian)."""
+"""Nạp dữ liệu và tách theo kịch bản đánh giá: giấu một họ tấn công, lớp hiếm, chéo tập dữ liệu."""
 import os
 
 import numpy as np
@@ -8,6 +8,14 @@ import pandas as pd
 def _norm(s):
     """Chuẩn hóa tên lớp để so khớp: chữ thường, chỉ giữ chữ và số."""
     return "".join(c for c in str(s).lower() if c.isalnum())
+
+
+def tactic_of(name, tactics):
+    """Chiến thuật ATT&CK của một lớp theo bảng conf/dataset/*.yaml; lớp không khớp mục nào là benign."""
+    hit = {t for t, keys in tactics.items() for k in keys if _norm(k) in _norm(name)}
+    if len(hit) > 1:
+        raise ValueError(f"lớp {name} khớp nhiều chiến thuật: {hit}")
+    return hit.pop() if hit else "benign"
 
 
 def _read_table(ds):
@@ -31,7 +39,6 @@ def load_csv(ds):
         return z["X"], z["y"]
     df = _read_table(ds)
     y = df.pop(ds.label_col).astype(str).to_numpy().astype(str)  # chuỗi độ dài cố định, lưu được vào npz
-    ts = df["timestamp"].to_numpy(dtype=np.int64) if "timestamp" in df else np.zeros(len(df), dtype=np.int64)
     df = df.drop(columns=list(ds.drop_cols), errors="ignore").select_dtypes("number")
     cols = df.columns.to_numpy().astype(str)
     X = df.to_numpy(dtype=np.float32)
@@ -41,7 +48,7 @@ def load_csv(ds):
     X, y = X[ok], y[ok]
     keep = X.std(axis=0) > 0  # bỏ cột hằng
     X = X[:, keep]
-    np.savez(ds.cache, X=X, y=y, cols=cols[keep], rows=np.flatnonzero(ok), ts=ts[ok])
+    np.savez(ds.cache, X=X, y=y, cols=cols[keep], rows=np.flatnonzero(ok))
     return X, y
 
 
@@ -51,24 +58,15 @@ def load_columns(ds):
     return z["cols"].tolist(), z["rows"]
 
 
-def load_ts(ds):
-    """Thời điểm của từng dòng X (micro giây, đọc từ cache do load_csv tạo)."""
-    return np.load(ds.cache, allow_pickle=False)["ts"]
-
-
 def class_table(y):
     names, counts = np.unique(y, return_counts=True)
     return dict(zip(names.tolist(), counts.tolist()))
 
 
-def make_split(X, y, ds, proto, eval_cap, seed, ts=None):
-    """Tách known-train/val/test và tập OOD.
+def make_split(X, y, ds, proto, eval_cap, seed):
+    """Tách known-train/val/test và tập OOD. Lớp 0 luôn là lưu lượng bình thường.
 
-    P0: OOD là các lớp hiếm. P1: OOD là họ tấn công `proto.heldout`, các lớp hiếm bị bỏ.
-    P1T: OOD là mọi họ của chiến thuật `proto.heldout`. P3: chỉ học dữ liệu trước mốc `proto.cut` (giây); OOD là các
-    lớp chỉ xuất hiện sau mốc, known-test gồm lưu lượng bình thường sau mốc và tấn công đã biết trước mốc.
-    Tuỳ chọn `proto.n_benign`, `proto.n_per_attack`: giới hạn số mẫu có nhãn khi huấn luyện.
-    Lớp 0 luôn là lưu lượng bình thường.
+    Có proto.heldout: OOD là họ tấn công đó, các lớp hiếm bị bỏ. Không có: OOD là các lớp hiếm.
     """
     rng = np.random.default_rng(seed)
     names, inv = np.unique(y, return_inverse=True)
@@ -78,17 +76,8 @@ def make_split(X, y, ds, proto, eval_cap, seed, ts=None):
         raise ValueError(f"không thấy lớp bình thường '{ds.benign}' trong {class_table(y)}")
     benign = norm.index(_norm(ds.benign))
 
-    heldout = proto.get("heldout") if proto.name != "p2" else None     # P2 tách mạng nguồn như P0
-    early = None
-    if proto.name == "p3":
-        early = ts < proto.cut * 1_000_000
-        n_early = np.bincount(inv[early], minlength=len(names))
-        ood_ids = [i for i in range(len(names)) if i != benign and n_early[i] == 0]
-        counts = n_early        # lớp hiếm trước mốc bị bỏ, không tính là đã biết
-    elif proto.name == "p1t":
-        keys = [_norm(k) for k in ds.tactics[heldout]]
-        ood_ids = [i for i, n in enumerate(norm) if any(k in n for k in keys)]
-    elif heldout:
+    heldout = proto.get("heldout")
+    if heldout:
         ood_ids = [i for i, n in enumerate(norm) if _norm(heldout) in n]
         if len(ood_ids) != 1:
             raise ValueError(f"heldout='{heldout}' khớp {len(ood_ids)} lớp. Các lớp: {class_table(y)}")
@@ -102,15 +91,12 @@ def make_split(X, y, ds, proto, eval_cap, seed, ts=None):
     yk = remap[inv]
     tr, va, te = [], [], []
     for k in range(len(known)):
-        idx = rng.permutation(np.flatnonzero(yk == k if early is None else (yk == k) & early))
+        idx = rng.permutation(np.flatnonzero(yk == k))
         n_te = len(idx) // 2
         n_va = max(1, int(0.05 * len(idx)))
         te.append(idx[:n_te])
         va.append(idx[n_te:n_te + n_va])
-        limit = proto.get("n_benign") if k == 0 else proto.get("n_per_attack")
-        tr.append(idx[n_te + n_va:][: limit or ds.max_per_class])
-    if early is not None:
-        te[0] = np.flatnonzero((yk == 0) & ~early)
+        tr.append(idx[n_te + n_va:][: ds.max_per_class])
     tr, va, te = map(np.concatenate, (tr, va, te))
     ood = np.flatnonzero(np.isin(inv, ood_ids))
 
@@ -131,7 +117,7 @@ def make_split(X, y, ds, proto, eval_cap, seed, ts=None):
 
 
 def align_target(Zt, Zs, mode):
-    """Hiệu chỉnh P2: đưa đặc trưng mạng đích về thang của mạng nguồn, chỉ dùng flow không nhãn của mạng đích."""
+    """Hiệu chỉnh mạng đích: đưa đặc trưng mạng đích về thang của mạng nguồn, chỉ dùng flow không nhãn của mạng đích."""
     if mode == "z":
         m, s = Zt.mean(0), Zt.std(0) + 1e-6
         return lambda Z: (Z - m) / s
@@ -141,7 +127,7 @@ def align_target(Zt, Zs, mode):
 
 
 def cross_split(sp, Xt, yt, dt, eval_cap, per_class, seed, align=None):
-    """P2: `sp` là phép tách trên mạng nguồn. Thay phần kiểm thử bằng dữ liệu mạng đích, chuẩn hoá theo mạng nguồn.
+    """Chéo tập dữ liệu: `sp` là phép tách trên mạng nguồn. Thay phần kiểm thử bằng dữ liệu mạng đích, chuẩn hoá theo mạng nguồn.
 
     Known-test là lưu lượng bình thường của mạng đích. OOD là mọi tấn công của mạng đích, tối đa per_class mẫu mỗi lớp.
     align (z, quantile): hiệu chỉnh thêm theo 200.000 flow không nhãn lấy ngẫu nhiên ở mạng đích.
@@ -158,26 +144,11 @@ def cross_split(sp, Xt, yt, dt, eval_cap, per_class, seed, align=None):
             "ood_classes": np.unique(yt[idx_a]).tolist(), "ood_names": yt[idx_a]}
 
 
-def drop_top_features(sp, k, cols, seed, device):
-    """PF: bỏ k đặc trưng XGBoost dùng nhiều nhất trên tập huấn luyện (không dùng dữ liệu OOD)."""
-    import xgboost as xgb
-    clf = xgb.XGBClassifier(n_estimators=50, max_depth=6, learning_rate=0.1, tree_method="hist", device=device,
-                            objective="multi:softprob", random_state=seed)
-    clf.fit(sp["X_tr"], sp["y_tr"])
-    top = np.argsort(clf.feature_importances_)[::-1][:k]
-    keep = np.setdiff1d(np.arange(sp["X_tr"].shape[1]), top)
-    return _select(sp, keep), [cols[i] for i in keep], [cols[i] for i in top]
-
-
 def drop_named(sp, parts, cols):
-    """PE: bỏ các cột có tên chứa một trong các chuỗi, dùng cho dấu vết ngăn xếp TCP của máy trong testbed."""
+    """Bỏ các cột có tên chứa một trong các chuỗi, dùng cho đặc trưng phụ thuộc ngăn xếp TCP."""
     hit = [any(p in c for p in parts) for c in cols]
     keep = np.flatnonzero(~np.array(hit))
-    return _select(sp, keep), [cols[i] for i in keep], [c for c, h in zip(cols, hit) if h]
-
-
-def _select(sp, keep):
     out = {**sp, "mu": sp["mu"][keep], "sd": sp["sd"][keep]}
     for key in ("X_tr", "X_va", "X_te", "X_ood"):
         out[key] = sp[key][:, keep]
-    return out
+    return out, [cols[i] for i in keep], [c for c, h in zip(cols, hit) if h]

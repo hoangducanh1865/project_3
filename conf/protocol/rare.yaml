@@ -1,0 +1,3 @@
+# OOD là các lớp hiếm (dưới dataset.rare_threshold mẫu), cách chia của bài gốc CLOSR.
+name: rare
+heldout: null

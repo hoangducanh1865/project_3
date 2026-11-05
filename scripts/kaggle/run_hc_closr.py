@@ -6,9 +6,9 @@ import glob
 import os
 import subprocess
 
-COMMIT = "main"
-# Slowloris: kịch bản duy nhất ở P1 có đủ cả 3 tầng. Cùng cấu hình và seed với số đã báo cáo (AUROC 0,944).
-JOBS = {0: ["protocol=p1 protocol.heldout=slowloris artifact_dir=/kaggle/working/artifact"]}
+COMMIT = "exp/hard-benchmarks"
+# Slowloris: họ duy nhất có đủ cả 3 tầng. Cùng cấu hình và seed với số đã báo cáo (AUROC 0,944).
+JOBS = {0: ["protocol.heldout=slowloris clean=false artifact_dir=/kaggle/working/artifact"]}
 
 
 def sh(cmd, **kw):
@@ -19,7 +19,7 @@ def sh(cmd, **kw):
 W = "/kaggle/working"
 sh(f"git clone -q https://github.com/hoangducanh1865/project_3 {W}/project_3 && git -C {W}/project_3 checkout -q {COMMIT}")
 os.chdir(f"{W}/project_3")
-sh("pip install -q hydra-core tabulate")
+sh("pip install -q hydra-core")
 sh("git clone -q https://github.com/jackwilkie/CLOSR third_party/CLOSR")
 csv = glob.glob("/kaggle/input/**/lycos.csv", recursive=True)[0]
 procs = []

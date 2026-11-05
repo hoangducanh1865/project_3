@@ -1,13 +1,12 @@
-# NF-ToN-IoT-v3 (src/netflow.py): benign và tấn công thu xen kẽ theo giờ, một đặc trưng đạt tối đa khoảng 0,85.
-# Bảng chiến thuật do đề tài tự lập theo tên họ tấn công, chưa đối chiếu chuyên gia.
+# NF-ToN-IoT-v3 (Luay 2025), đã chuyển đổi bằng src/netflow.py. Xem datasets/README.md.
 name: nf_ton
-path: ${oc.env:NF_DIR,data}/nf_ton.csv
+path: ${oc.env:NF_DIR,data/nf}/nf_ton.csv
 cache: ${oc.env:CACHE_DIR,/tmp}/nf_ton_cache.npz
 label_col: label
 benign: benign
-drop_cols: [timestamp]
 rare_threshold: 100
 max_per_class: 100000
+stack_features: [TTL, TCP_WIN]   # cột chứa các chuỗi này phụ thuộc hệ điều hành và công cụ của máy gửi
 tactics:
   impact: [ddos, dos, ransomware]
   discovery: [scanning]

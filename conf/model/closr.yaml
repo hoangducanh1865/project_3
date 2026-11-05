@@ -1,4 +1,4 @@
-# CLOSR [16]. Kiến trúc và hàm mất mát của repo gốc; ngân sách huấn luyện nhỏ hơn
+# CLOSR (Wilkie 2026). Kiến trúc và hàm mất mát của repo gốc; ngân sách huấn luyện nhỏ hơn
 # (gốc: 200 vòng, lr 1e-5) nên lr được tăng.
 name: closr
 kind: closr

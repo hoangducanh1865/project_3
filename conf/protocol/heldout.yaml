@@ -1,0 +1,4 @@
+# Giấu trọn một họ tấn công khỏi tập huấn luyện, họ đó là OOD khi kiểm thử.
+# heldout khớp không phân biệt hoa thường với một phần tên lớp, ví dụ slowloris, portscan.
+name: heldout
+heldout: ???

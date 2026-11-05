@@ -3,15 +3,20 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-from .models import _chunks, _repo, _t
+from .common import chunks, tensor, use_closr_repo
 from .response import L_KNOWN, likelihood, respond
+
+
+def _surprise(a, ref):
+    """-log của p-value thực nghiệm: tỉ lệ giá trị trong ref (đã sắp xếp) lớn hơn hoặc bằng a."""
+    return -np.log((len(ref) - np.searchsorted(ref, a, side="left") + 1) / (len(ref) + 1))
 
 
 class HCDetector:
     """Tính điểm OOD ở mức họ và mức chiến thuật, phân 3 tầng rồi đề xuất biện pháp ứng phó.
 
     Mỗi tầng: likelihood CLOSR (công thức eval_closr.py) và khoảng cách KNN tới láng giềng thứ k của lớp dự đoán
-    trên embedding của lớp đó [13]. Hai điểm được chuẩn hoá theo dữ liệu known (val) rồi cộng lại.
+    trên embedding của lớp đó. Hai điểm được chuẩn hoá theo dữ liệu known (val) rồi cộng lại.
     Tầng 1: không OOD ở mức họ. Tầng 2: OOD ở mức họ, không OOD ở mức chiến thuật và chiến thuật dự đoán là một
     chiến thuật tấn công. Tầng 3: còn lại.
     """
@@ -20,7 +25,7 @@ class HCDetector:
 
     def __init__(self, model, levels, k, dev):
         self.model, self.levels, self.k, self.dev = model, levels, k, dev
-        self.stats, self.thr, self.s_va, self.info = None, None, None, {}
+        self.stats, self.thr, self.s_va, self.ref, self.info = None, None, None, None, {}
 
     @classmethod
     def fit(cls, model, sp, f2t, K, T, m, seed, dev):
@@ -40,11 +45,12 @@ class HCDetector:
         det.stats = {lv: [(float(a.mean()), float(a.std() + 1e-12)) for a in r_va[lv][:2]] for lv in r_va}
         det.s_va = {lv: det.unified(r_va, lv) for lv in r_va}
         det.thr = {lv: float(np.quantile(det.s_va[lv], m.quantile)) for lv in det.s_va}
+        det.ref = [np.sort(a) for a in det._benign_distance(sp["X_va"][sp["y_va"] == 0])]
         return det
 
     @torch.no_grad()
     def embed(self, Xn):
-        return torch.cat([F.normalize(self.model(_t(Xn[s], self.dev)), dim=-1) for s in _chunks(len(Xn), 4096)])
+        return torch.cat([F.normalize(self.model(tensor(Xn[s], self.dev)), dim=-1) for s in chunks(len(Xn), 4096)])
 
     @torch.no_grad()
     def raw(self, Xn):
@@ -60,7 +66,7 @@ class HCDetector:
             for c in range(len(index)):
                 rows = torch.nonzero(pred == c).squeeze(1)
                 k = min(self.k, len(index[c]))
-                for s in _chunks(len(rows), 4096):
+                for s in chunks(len(rows), 4096):
                     r = rows[s]
                     d = 1 - e[r, c] @ index[c].T
                     knn[r] = d.topk(k, largest=False).values[:, -1]
@@ -68,25 +74,28 @@ class HCDetector:
         return out
 
     @torch.no_grad()
-    def parts(self, Xn):
-        """Thành phần điểm của từng flow: độ tương đồng với tâm và khoảng cách KNN tới mọi lớp, ở từng mức."""
-        e_all = self.embed(Xn)
-        out = {}
-        for name, (heads, cents, index) in zip(("fam", "tac"), self.levels):
-            e = e_all[:, heads]
-            out[f"sim_{name}"] = (e * cents[None]).sum(-1).cpu().numpy()
-            out[f"knn_{name}"] = torch.stack([torch.cat([
-                (1 - e[s, c] @ index[c].T).topk(min(self.k, len(index[c])), largest=False).values[:, -1]
-                for s in _chunks(len(Xn), 4096)]) for c in range(len(index))], 1).cpu().numpy()
-        return out
+    def similarity(self, Xn, level=0):
+        """Độ tương đồng với tâm của mọi lớp, level 0 là mức họ, 1 là mức chiến thuật."""
+        heads, cents, _ = self.levels[level]
+        return (self.embed(Xn)[:, heads] * cents[None]).sum(-1).cpu().numpy()
+
+    @torch.no_grad()
+    def _benign_distance(self, Xn):
+        """Khoảng cách tới tâm benign và tới láng giềng thứ k trong chỉ mục benign, trên đầu benign."""
+        e = self.embed(Xn)[:, 0]
+        _, cents, index = self.levels[0]
+        knn = [(1 - e[s] @ index[0].T).topk(min(self.k, len(index[0])), largest=False).values[:, -1]
+               for s in chunks(len(e), 4096)]
+        return -(e @ cents[0]).cpu().numpy(), torch.cat(knn).cpu().numpy()
 
     def unified(self, r, lv):
         (m1, s1), (m2, s2) = self.stats[lv]
         return (r[lv][0] - m1) / s1 + (r[lv][1] - m2) / s2
 
     def attack(self, Xn):
-        """Điểm tấn công: càng xa tâm lưu lượng bình thường (trong không gian của lớp đó) càng cao."""
-        return -(self.embed(Xn)[:, 0] @ self.levels[0][1][0]).cpu().numpy()
+        """Điểm tấn công F: kết hợp p-value của hai khoảng cách theo phương pháp Fisher, so với flow bình thường ở val."""
+        cos, knn = self._benign_distance(Xn)
+        return _surprise(cos, self.ref[0]) + _surprise(knn, self.ref[1])
 
     def tiers(self, Xn):
         r = self.raw(Xn)
@@ -120,11 +129,11 @@ class HCDetector:
         # clone: e là lát cắt của embedding đầy đủ, không clone thì torch.save ghi cả tensor gốc
         levels = [(s.start, s.stop, c.cpu(), [e.cpu().clone() for e in ix]) for s, c, ix in self.levels]
         return {"weights": weights, "levels": levels, "k": self.k, "stats": self.stats, "thr": self.thr,
-                "s_va": self.s_va, "info": self.info}
+                "s_va": self.s_va, "ref": self.ref, "info": self.info}
 
     @classmethod
     def from_state(cls, st, dev="cpu"):
-        _repo()
+        use_closr_repo()
         from model.model import CLOSRMLP
         a = st["info"]["arch"]
         model = CLOSRMLP(d_in=a["d_in"], n_classes=a["n_heads"], d_out=a["d_out"], neurons=a["neurons"],
@@ -134,4 +143,5 @@ class HCDetector:
         levels = [(slice(a_, b_), c.to(dev), [e.to(dev) for e in ix]) for a_, b_, c, ix in st["levels"]]
         det = cls(model, levels, st["k"], dev)
         det.stats, det.thr, det.s_va, det.info = st["stats"], st["thr"], st["s_va"], st["info"]
+        det.ref = st.get("ref")     # mô hình xuất trước khi có điểm F không có mục này
         return det

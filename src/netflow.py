@@ -1,7 +1,7 @@
 """Lấy mẫu các bộ NetFlow v3 (Sarhan và cộng sự, cùng 53 đặc trưng trên nhiều mạng) thành bảng số để dùng như LYCOS.
 
 Bỏ IP, cổng và mã truy vấn DNS, số đo lấy log1p. Benign và mỗi họ tấn công giữ tối đa CAP dòng, sau khi trộn ngẫu nhiên
-từng phần của file. Đổi nhãn dos thành dos_attack để giao thức P1 khớp đúng một lớp (ddos cũng chứa chuỗi dos).
+từng phần của file. Đổi nhãn dos thành dos_attack để khi giấu họ này chỉ khớp đúng một lớp (ddos cũng chứa chuỗi dos).
 Dùng: python -m src.netflow <thư mục chứa NF-*-v3.csv> <thư mục ra>
 """
 import glob
@@ -12,7 +12,7 @@ import numpy as np
 import pandas as pd
 
 FILES = {"nf_ton": "NF-ToN-IoT-v3.csv", "nf_cic": "NF-CICIDS2018-v3.csv"}
-DROP = ["IPV4_SRC_ADDR", "IPV4_DST_ADDR", "L4_SRC_PORT", "L4_DST_PORT", "Label", "FLOW_END_MILLISECONDS", "DNS_QUERY_ID"]
+DROP = ["IPV4_SRC_ADDR", "IPV4_DST_ADDR", "L4_SRC_PORT", "L4_DST_PORT", "Label", "FLOW_START_MILLISECONDS", "FLOW_END_MILLISECONDS", "DNS_QUERY_ID"]
 CAP = 300_000
 BENIGN_CAP = 900_000
 
@@ -37,10 +37,8 @@ def convert(path, seed=0):
         frames.append(d.iloc[rng.permutation(len(d))[:limit]])
     d = pd.concat(frames, ignore_index=True)
     label = d.pop("Attack").astype(str).str.lower().replace({"dos": "dos_attack"})
-    ts = d.pop("FLOW_START_MILLISECONDS").astype("int64") * 1000
     d = d.drop(columns=DROP, errors="ignore").apply(pd.to_numeric, errors="coerce").replace([np.inf, -np.inf], np.nan).fillna(0)
     out = np.log1p(d.clip(lower=0)).astype("float32")
-    out["timestamp"] = ts
     out["label"] = label.to_numpy()
     return out
 
