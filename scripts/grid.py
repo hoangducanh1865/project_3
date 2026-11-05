@@ -41,6 +41,8 @@ GRIDS = {
     "confirm": rows(CONFIRM, ["xgboost", "hc_closr"], [3]) + rows(CLEAN, ["xgboost", "hc_closr"], [3]),
     # Đối chứng chỉ học lưu lượng bình thường, cùng phép tách với HC-CLOSR
     "anomaly": rows(CLEAN, ["raw_knn", "iforest"], [2, 3]) + rows(CONFIRM, ["raw_knn", "iforest"], [3]),
+    # CLOSR [16] làm baseline, cùng phép tách với HC-CLOSR: P1 trước, P2 sau
+    "closr": rows(CONFIRM, ["closr"], [3]) + rows(NF_PE_P1 + PE_P1, ["closr"], [3, 2]) + rows(NF_PE_P2 + PE_P2, ["closr"], [3, 2]),
     "long": rows(CLEAN, ["hc_closr model.epochs=30"], [2]),
 }
 
