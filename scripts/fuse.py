@@ -23,7 +23,8 @@ def load(root):
         r = json.load(open(os.path.join(os.path.dirname(p), "result.json")))
         c = r["config"]
         name = r["model"] + (f"_e{c['model']['epochs']}" if c["model"].get("epochs", 10) != 10 else "")
-        key = (c["dataset"]["name"], r["protocol"], str(r["heldout"]), c["protocol"].get("align"), r["seed"])
+        key = (c["dataset"]["name"], r["protocol"], str(r["heldout"]), c["protocol"].get("align"),
+               bool(r["dropped_features"]), r["seed"])
         runs[key][name] = (r, p)
     return runs
 
@@ -109,7 +110,7 @@ def main(root, neural="hc_closr"):
     names = sorted({n for v in table.values() for n in v})
     print("kịch bản".ljust(38) + "".join(n.rjust(16) for n in names))
     for k, v in table.items():
-        print("/".join(map(str, k[:4])).ljust(38) + "".join(
+        print("/".join(map(str, k)).ljust(38) + "".join(
             (" ".join(f"{x:.2f}" for x in v[n]) if n in v else "-").rjust(16) for n in names))
     both = [v for v in table.values() if "xgb" in v]
     print("\nTrung bình AUROC, số kịch bản hơn XGBoost từ 0,005, thua từ 0,005:")
@@ -120,7 +121,7 @@ def main(root, neural="hc_closr"):
     print("\nChiến thuật OOD:")
     for k, v in tact.items():
         if v:
-            print("/".join(map(str, k[:4])).ljust(38), {a: round(b, 3) for a, b in v.items()})
+            print("/".join(map(str, k)).ljust(38), {a: round(b, 3) for a, b in v.items()})
 
 
 if __name__ == "__main__":
