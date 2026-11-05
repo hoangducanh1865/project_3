@@ -1,8 +1,0 @@
-# HC-CLOSR với embedding PLE theo phân vị (Gorishniy 2022).
-defaults:
-  - hc_closr
-  - _self_
-name: hc_closr_ple
-num_embed: ple
-n_bins: 48
-d_embedding: 24

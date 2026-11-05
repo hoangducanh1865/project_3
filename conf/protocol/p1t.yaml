@@ -1,4 +1,0 @@
-# P1T: giấu trọn một chiến thuật ATT&CK (mọi họ thuộc chiến thuật) khỏi tập huấn luyện.
-# heldout là tên chiến thuật trong dataset.tactics. Không còn họ anh em cùng chiến thuật nên khó hơn P1.
-name: p1t
-heldout: ???

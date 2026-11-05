@@ -1,9 +1,0 @@
-# HC-CLOSR với embedding PLR tuần hoàn (Gorishniy 2022). sigma: giá trị mặc định của rtdl_num_embeddings, không tinh chỉnh.
-defaults:
-  - hc_closr
-  - _self_
-name: hc_closr_plr
-num_embed: plr
-n_frequencies: 48
-d_embedding: 24
-sigma: 0.01

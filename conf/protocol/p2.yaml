@@ -1,6 +1,0 @@
-# P2: học trên một mạng, kiểm thử trên mạng khác cùng bộ đặc trưng LycoSTand [5][6].
-# Chạy chiều ngược: dataset=lycos18 protocol.target=lycos protocol.heldout=to17
-name: p2
-heldout: to18
-target: lycos18
-per_class: 5000   # số mẫu tấn công tối đa mỗi lớp ở mạng đích

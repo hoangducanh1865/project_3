@@ -1,5 +1,0 @@
-# PE: P1 sau khi bỏ dấu vết ngăn xếp TCP. Độ dài header và cửa sổ khởi tạo phụ thuộc hệ điều hành và công cụ của máy tấn
-# công trong testbed, không phải bản chất tấn công, nhưng là các đặc trưng mạnh nhất khi dùng một mình (mô hình stump, [5]).
-name: pe
-heldout: ???
-drop_like: [hdr_len, tcp_init_win]
