@@ -23,7 +23,8 @@ def load(root):
     for p in glob.glob(f"{root}/*/scores.npz"):
         r = json.load(open(os.path.join(os.path.dirname(p), "result.json")))
         c = r["config"]
-        name = r["model"] + (f"_e{c['model']['epochs']}" if c["model"].get("epochs", 10) != 10 else "")
+        name = r["model"] + (f"_e{c['model']['epochs']}" if c["model"].get("epochs", 10) != 10 else "") \
+            + (f"_w{c['model']['tactic_weight']}" if c["model"].get("tactic_weight", 1) != 1 else "")
         key = (c["dataset"]["name"], r["protocol"], str(r["heldout"]), c["protocol"].get("align"),
                bool(r["dropped_features"]), r["seed"])
         runs[key][name] = (r, p)

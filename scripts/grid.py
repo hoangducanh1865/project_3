@@ -43,6 +43,13 @@ GRIDS = {
     "anomaly": rows(CLEAN, ["raw_knn", "iforest"], [2, 3]) + rows(CONFIRM, ["raw_knn", "iforest"], [3]),
     # CLOSR [16] làm baseline, cùng phép tách với HC-CLOSR: P1 trước, P2 sau
     "closr": rows(CONFIRM, ["closr"], [3]) + rows(NF_PE_P1 + PE_P1, ["closr"], [3, 2]) + rows(NF_PE_P2 + PE_P2, ["closr"], [3, 2]),
+    # Thêm lần chạy để mỗi kịch bản có 3 lần: phát triển seed 2, 3, 4; xác nhận seed 3, 4, 5
+    "more_cheap": rows(CONFIRM, ["raw_knn", "iforest", "xgboost"], [4, 5]) + rows(CLEAN, ["raw_knn", "iforest", "xgboost"], [4]),
+    "more_hc": rows(CONFIRM, ["hc_closr"], [4]) + rows(CLEAN, ["hc_closr"], [4]) + rows(CONFIRM, ["hc_closr"], [5]),
+    "more_closr": rows(CONFIRM, ["closr"], [4]) + rows(CLEAN, ["closr"], [4]) + rows(CONFIRM, ["closr"], [5]),
+    # Trọng số đầu chiến thuật lớn hơn, trên các họ có chiến thuật còn trong tập huấn luyện
+    "tactic": rows([PE_P1[0], PE_P1[1], NF_PE_P1[0], NF_PE_P1[1], NF_PE_P1[2], NF_PE_P1[3], CONFIRM[1], CONFIRM[5]],
+                   ["hc_closr model.tactic_weight=3"], [3]),
     "long": rows(CLEAN, ["hc_closr model.epochs=30"], [2]),
 }
 
