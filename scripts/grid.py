@@ -16,7 +16,7 @@ NF_PE_P1 = [f"dataset=nf_ton protocol=pe protocol.heldout={h} '{NF_DROP}'" for h
 NF_PE_P2 = [f"{s} '+{NF_DROP}'" for s in NF_P2]
 CLEAN = NF_PE_P1 + NF_PE_P2 + PE_P1 + PE_P2
 # Xác nhận: 12 kịch bản chưa dùng khi chọn quy tắc kết hợp (10 họ từ 10.000 flow của NF-CIC và 2 họ còn lại của NF-ToN).
-# Quy tắc cố định trước khi chạy: điểm mạng nơ-ron là Fisher của cos và KNN, kết hợp là thêm p-value của XGBoost.
+# Quy tắc cố định trước khi chạy: điểm tấn công là Fisher của cos và KNN trên embedding.
 NF_CIC_HELD = ["bot", "hoic", "loic-http", "goldeneye", "hulk", "slowhttptest", "dos_attacks-slowloris", "ftp",
                "infilteration", "ssh"]
 CONFIRM = [f"dataset=nf_cic protocol=pe protocol.heldout={h} '{NF_DROP}'" for h in NF_CIC_HELD] \

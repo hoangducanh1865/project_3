@@ -1,6 +1,7 @@
 """Thử kết hợp điểm tấn công và cách chọn chiến thuật cho OOD trên điểm đã lưu, không huấn luyện lại.
 
-Điểm của từng mô hình được đổi thành -log p-value thực nghiệm so với flow bình thường ở val rồi kết hợp theo Fisher.
+Điểm khoảng cách tới tâm và KNN của mạng nơ-ron được đổi thành -log p-value thực nghiệm so với flow bình thường ở val
+rồi kết hợp theo Fisher. XGBoost và các đối chứng chỉ để so sánh, không gộp vào điểm.
 Dùng (từ gốc repo): python scripts/fuse.py <thư mục jobs> [model mạng nơ-ron]
 """
 import collections
@@ -98,9 +99,6 @@ def main(root, neural="hc_closr"):
                 raise ValueError(f"{key}: hai mô hình không cùng phép tách")
             x = split(zx, lambda a: 1 - zx[f"{a}_proba"][:, 0])
             row["xgb"] = x
-            for n in ("nb.cos", "nb.knn", "nb.cos+knn"):
-                a = row[n]
-                row[f"{n}|xgb"] = tuple(survival(i, a[2]) + survival(j, x[2]) for i, j in zip(a, x))
         table[key] = {n: report(*v) for n, v in row.items()}
         for n in ("raw_knn", "iforest"):    # đối chứng chỉ học lưu lượng bình thường
             if n in ms:
