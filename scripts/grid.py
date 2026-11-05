@@ -50,6 +50,8 @@ GRIDS = {
     # Trọng số đầu chiến thuật lớn hơn, trên các họ có chiến thuật còn trong tập huấn luyện
     "tactic": rows([PE_P1[0], PE_P1[1], NF_PE_P1[0], NF_PE_P1[1], NF_PE_P1[2], NF_PE_P1[3], CONFIRM[1], CONFIRM[5]],
                    ["hc_closr model.tactic_weight=3"], [3]),
+    # Ablation: bỏ đầu chiến thuật, trên đúng các họ OOD đã làm sạch
+    "abl": rows(NF_PE_P1 + PE_P1 + CONFIRM, ["closr_knn"], [3]),
     "long": rows(CLEAN, ["hc_closr model.epochs=30"], [2]),
 }
 

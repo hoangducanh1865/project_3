@@ -101,6 +101,9 @@ def main(root, neural="hc_closr"):
             x = split(zx, lambda a: 1 - zx[f"{a}_proba"][:, 0])
             row["xgb"] = x
         table[key] = {n: report(*v) for n, v in row.items()}
+        if "closr_knn" in ms:               # ablation: cùng điểm tấn công, không có đầu chiến thuật
+            zc = np.load(ms["closr_knn"][1])
+            table[key]["ablation"] = report(*nb(zc, "nb")["nb.cos+knn"])
         for n in ("raw_knn", "iforest"):    # đối chứng chỉ học lưu lượng bình thường
             if n in ms:
                 za = np.load(ms[n][1])
