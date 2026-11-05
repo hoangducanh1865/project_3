@@ -121,6 +121,13 @@ def build_mlp(cfg, sp, dev):
     return scorer
 
 
+def _as_attack(scorer):
+    """Bộ phát hiện chỉ học lưu lượng bình thường: điểm bất thường cũng là điểm tấn công."""
+    scorer.attack = lambda Xn: scorer(Xn)[0]
+    scorer.parts = lambda Xn: {"attack": scorer(Xn)[0]}
+    return scorer
+
+
 # ---------------------------------------------------------------- XGBoost
 def build_xgboost(cfg, sp, dev):
     import xgboost as xgb
@@ -196,7 +203,24 @@ def build_iforest(cfg, sp, dev):
     Xb = sp["X_tr"][sp["y_tr"] == 0]
     Xb = Xb[rng.permutation(len(Xb))[: m.max_train]]
     clf = IsolationForest(n_estimators=m.n_estimators, random_state=cfg.seed, n_jobs=-1).fit(Xb)
-    return lambda Xn: (-clf.score_samples(Xn), None)
+
+    def scorer(Xn):
+        return -clf.score_samples(Xn), None
+    return _as_attack(scorer)
+
+
+def build_raw_knn(cfg, sp, dev):
+    """Đối chứng không cần học: khoảng cách tới láng giềng thứ k trong flow bình thường, trên đặc trưng đã chuẩn hoá."""
+    m = cfg.model
+    rng = np.random.default_rng(cfg.seed)
+    Xb = sp["X_tr"][sp["y_tr"] == 0]
+    index = _t(Xb[rng.permutation(len(Xb))[: m.index_per_class]], dev)
+
+    @torch.no_grad()
+    def scorer(Xn):
+        d = [torch.cdist(_t(Xn[s], dev), index).topk(m.k, largest=False).values[:, -1] for s in _chunks(len(Xn), 4096)]
+        return torch.cat(d).cpu().numpy(), None
+    return _as_attack(scorer)
 
 
 # ---------------------------------------------------------------- Autoencoder
@@ -435,4 +459,5 @@ BUILDERS = {
     "mlp": build_mlp, "xgboost": build_xgboost, "iforest": build_iforest,
     "autoencoder": build_autoencoder, "clad": build_clad, "closr": build_closr,
     "hc_closr": build_hc_closr, "closr_knn": build_closr_knn, "tabpfn": build_tabpfn, "stump": build_stump,
+    "raw_knn": build_raw_knn,
 }

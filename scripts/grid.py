@@ -39,6 +39,8 @@ GRIDS = {
     # Hiệu chỉnh mạng đích bằng flow không nhãn và huấn luyện lâu hơn
     "align": rows(CROSS, ["xgboost", "hc_closr"], [2]),
     "confirm": rows(CONFIRM, ["xgboost", "hc_closr"], [3]) + rows(CLEAN, ["xgboost", "hc_closr"], [3]),
+    # Đối chứng chỉ học lưu lượng bình thường, cùng phép tách với HC-CLOSR
+    "anomaly": rows(CLEAN, ["raw_knn", "iforest"], [2, 3]) + rows(CONFIRM, ["raw_knn", "iforest"], [3]),
     "long": rows(CLEAN, ["hc_closr model.epochs=30"], [2]),
 }
 

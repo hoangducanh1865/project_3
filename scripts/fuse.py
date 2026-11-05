@@ -102,6 +102,10 @@ def main(root, neural="hc_closr"):
                 a = row[n]
                 row[f"{n}|xgb"] = tuple(survival(i, a[2]) + survival(j, x[2]) for i, j in zip(a, x))
         table[key] = {n: report(*v) for n, v in row.items()}
+        for n in ("raw_knn", "iforest"):    # đối chứng chỉ học lưu lượng bình thường
+            if n in ms:
+                za = np.load(ms[n][1])
+                table[key][n] = report(*split(za, lambda a: za[f"{a}_attack"]))
         tact[key] = tactic_rows(r, z, zx)
 
     with open(os.path.join(root, "..", "fuse.json"), "w") as f:

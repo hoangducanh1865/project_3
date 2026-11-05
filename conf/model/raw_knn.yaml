@@ -1,0 +1,5 @@
+# KNN trên đặc trưng đã chuẩn hoá, không qua encoder: đối chứng để tách đóng góp của biểu diễn học được.
+name: raw_knn
+kind: raw_knn
+k: 25
+index_per_class: 20000
