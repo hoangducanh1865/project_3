@@ -103,6 +103,9 @@ def main(root, neural="hc_closr"):
         table[key] = {n: report(*v) for n, v in row.items()}
         tact[key] = tactic_rows(r, z, zx)
 
+    with open(os.path.join(root, "..", "fuse.json"), "w") as f:
+        json.dump({"table": [[list(map(str, k)), v] for k, v in table.items()],
+                   "tactics": [[list(map(str, k)), v] for k, v in tact.items()]}, f, ensure_ascii=False)
     names = sorted({n for v in table.values() for n in v})
     print("kịch bản".ljust(38) + "".join(n.rjust(16) for n in names))
     for k, v in table.items():
