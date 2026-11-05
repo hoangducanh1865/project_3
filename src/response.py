@@ -5,7 +5,6 @@ L (khả năng, 1-5, từ điểm OOD) và I (tác động, 1-5, theo chiến th
 Biện pháp lấy từ D3FEND (đã tra API, xem agents/claude/knowledge.md); dòng discovery là quy tắc tự đề xuất.
 Toàn bộ bảng là quy tắc thiết kế, chưa đối chiếu chuyên gia.
 """
-import numpy as np
 
 # (mức, tên, ví dụ hành động, đảo ngược được)
 LEVELS = [
@@ -42,6 +41,7 @@ L_KNOWN = 4
 
 def likelihood(score, val_scores):
     """L từ 1 đến 5 theo vị trí của điểm OOD so với dữ liệu known (val). Chưa dùng tần suất cảnh báo."""
+    import numpy as np
     q = np.quantile(val_scores, [0.95, 0.99, 0.999, 1.0])
     return 1 + np.searchsorted(q, score, side="right")
 

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><title>Trung tâm giám sát</title>
+<style>
+:root{--navy:#1f3864;--line:#dfe3ea;--soft:#f4f6f9;--text:#1c2330;--mute:#5c6778}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);background:var(--soft)}
+header{background:var(--navy);color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:17px;margin:0;font-weight:600}header span{font-size:13px;opacity:.85}
+main{max-width:1240px;margin:0 auto;padding:18px 24px;display:grid;gap:16px}
+.note{background:#fff;border:1px solid var(--line);border-left:4px solid var(--navy);padding:9px 14px;color:var(--mute);font-size:13px;border-radius:6px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:8px;padding:12px 16px}.tile b{display:block;font-size:24px;font-weight:600;color:var(--navy)}.tile span{color:var(--mute);font-size:12.5px}
+.tile.hot{background:var(--navy);border-color:var(--navy)}.tile.hot b,.tile.hot span{color:#fff}
+.card{background:#fff;border:1px solid var(--line);border-radius:8px;padding:14px 16px}.card h2{font-size:14px;margin:0 0 10px;font-weight:600}
+.two{display:grid;grid-template-columns:2fr 1fr;gap:16px}
+table{width:100%;border-collapse:collapse}th{font-size:12px;color:var(--mute);text-align:left;font-weight:500;border-bottom:1px solid var(--line);padding:6px 8px}
+td{padding:8px;border-bottom:1px solid var(--soft);vertical-align:top}
+.tag{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;background:var(--soft);color:var(--navy);border:1px solid var(--line)}
+.tag.m{background:var(--navy);color:#fff;border-color:var(--navy)}
+button{font:inherit;font-size:12.5px;padding:4px 10px;border-radius:6px;border:1px solid var(--navy);background:#fff;color:var(--navy);cursor:pointer;margin:2px 4px 2px 0}
+button.main{background:var(--navy);color:#fff}
+.small{font-size:12px;color:var(--mute)}.log div{padding:3px 0;border-bottom:1px solid var(--soft);font-size:13px}
+#bars{display:flex;align-items:flex-end;gap:2px;height:70px}#bars i{flex:1;background:var(--navy);min-height:1px;border-radius:2px 2px 0 0}
+.empty{color:var(--mute);padding:10px 8px}
+</style></head><body>
+<header><h1>Trung tâm giám sát xâm nhập</h1><span id="clock"></span></header>
+<main>
+<div class="note">Demo trên máy cục bộ. Tầng phát hiện là luật theo hành vi tại cổng vào web, không phải HC-CLOSR. Mô hình học từ testbed chưa dùng được trực tiếp trên lưu lượng này. Chiến thuật, mức rủi ro và biện pháp D3FEND dùng quy tắc của đề tài.</div>
+<div class="tiles">
+<div class="tile"><b id="req">0</b><span>Yêu cầu qua cổng</span></div>
+<div class="tile"><b id="ref">0</b><span>Kết nối bị từ chối</span></div>
+<div class="tile hot"><b id="wait">0</b><span>Sự cố chờ quyết định</span></div>
+<div class="tile"><b id="blk">0</b><span>Nguồn đang bị hạn chế</span></div>
+</div>
+<div class="card"><h2>Yêu cầu mỗi giây</h2><div id="bars"></div></div>
+<div class="card"><h2>Sự cố</h2><table><thead><tr><th>Mã</th><th>Giờ</th><th>Hành vi</th><th>Nguồn</th><th>Chiến thuật</th><th>Mức</th><th>Biện pháp D3FEND</th><th>Quyết định</th></tr></thead><tbody id="inc"></tbody></table></div>
+<div class="two">
+<div class="card"><h2>Nhật ký</h2><div class="log" id="log"></div></div>
+<div class="card"><h2>Nguồn đang bị hạn chế</h2><div id="lim"></div></div>
+</div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const post=u=>fetch(u,{method:'POST'}).then(load);
+async function load(){
+ const s=await (await fetch('/api/state')).json();
+ $('clock').textContent=new Date().toLocaleTimeString('vi-VN');
+ $('req').textContent=s.stats.requests;$('ref').textContent=s.stats.refused;
+ $('wait').textContent=s.incidents.filter(i=>i.status==='chờ quyết định').length;
+ const lim=[...Object.entries(s.blocked).map(([k,v])=>[k,v,'Đã chặn']),...Object.entries(s.limited).map(([k,v])=>[k,v,'Giới hạn'])];
+ $('blk').textContent=lim.length;
+ const max=Math.max(5,...s.series.map(x=>x.req));
+ $('bars').innerHTML=s.series.map(x=>`<i title="${x.t}: ${x.req}" style="height:${100*x.req/max}%"></i>`).join('');
+ $('inc').innerHTML=s.incidents.map(i=>`<tr><td>${i.id}</td><td>${i.time}</td><td>${i.name}</td><td>${i.src}</td><td>${s.tactics[i.tactic]||i.tactic}</td>
+ <td><span class="tag m">${i.level}</span><div class="small">R = ${i.L} × ${i.I} = ${i.R}</div></td><td class="small">${i.d3fend.join(', ')}</td>
+ <td>${i.status==='chờ quyết định'?`${Object.entries(s.actions).map(([k,v],n)=>`<button class="${n?'':'main'}" onclick="post('/api/decide?id=${i.id}&action=${k}')">${v}</button>`).join('')}<div class="small">Gemini quyết định sau ${i.left} giây</div>`
+ :`<span class="tag">${s.actions[i.decision]}</span><div class="small">${i.by}${i.reason?': '+i.reason:''}</div>`}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">Chưa có sự cố</td></tr>';
+ $('log').innerHTML=s.log.map(l=>`<div><span class="small">${l.t}</span> ${l.text}</div>`).join('');
+ $('lim').innerHTML=lim.map(([k,v,t])=>`<div style="margin-bottom:8px">${k} <span class="tag">${t}, còn ${v} giây</span> <button onclick="post('/api/release?src=${k}')">Gỡ</button></div>`).join('')||'<div class="empty">Không có</div>';
+}
+load();setInterval(load,1000);
+</script></body></html>

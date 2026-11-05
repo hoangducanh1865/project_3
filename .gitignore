@@ -245,3 +245,6 @@ third_party/
 /reports/
 bao_cao*.md
 results.csv
+
+# Demo khép kín: ứng dụng đích tải về khi chạy
+demo/target/
