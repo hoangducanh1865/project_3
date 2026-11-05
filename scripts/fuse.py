@@ -104,13 +104,13 @@ def main(root, neural="hc_closr"):
         tact[key] = tactic_rows(r, z, zx)
 
     names = sorted({n for v in table.values() for n in v})
-    print("kịch bản".ljust(38) + "".join(n.rjust(15) for n in names))
+    print("kịch bản".ljust(38) + "".join(n.rjust(16) for n in names))
     for k, v in table.items():
         print("/".join(map(str, k[:4])).ljust(38) + "".join(
-            (" ".join(f"{x:.3f}" for x in v[n][:2]) if n in v else "-").rjust(15) for n in names))
+            (" ".join(f"{x:.2f}" for x in v[n]) if n in v else "-").rjust(16) for n in names))
     both = [v for v in table.values() if "xgb" in v]
     print("\nTrung bình AUROC, số kịch bản hơn XGBoost từ 0,005, thua từ 0,005:")
-    for n in names:
+    for n in names if both else []:
         d = [v[n][0] - v["xgb"][0] for v in both if n in v]
         print(f"  {n:18s} {np.mean([v[n][0] for v in both if n in v]):.3f}  hơn {sum(x >= .005 for x in d)}  "
               f"thua {sum(x <= -.005 for x in d)}  kém nhất {min(d):+.3f}  FPR tb {np.mean([v[n][2] for v in both if n in v]):.3f}")
