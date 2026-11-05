@@ -1,0 +1,16 @@
+# NF-CICIDS2018-v3 (src/netflow.py), cùng bộ đặc trưng với nf_ton, dùng làm mạng đích khi chạy chéo.
+# Bảng chiến thuật do đề tài tự lập theo tên họ tấn công, chưa đối chiếu chuyên gia.
+name: nf_cic
+path: ${oc.env:NF_DIR,data}/nf_cic.csv
+cache: ${oc.env:CACHE_DIR,/tmp}/nf_cic_cache.npz
+label_col: label
+benign: benign
+drop_cols: [timestamp]
+rare_threshold: 100
+max_per_class: 100000
+tactics:
+  impact: [ddos, dos]
+  credential_access: [ftp, ssh, bruteforceweb]
+  initial_access: [xss, sql]
+  command_and_control: [bot]
+  lateral_movement: [infilteration]

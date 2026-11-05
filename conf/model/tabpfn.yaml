@@ -1,0 +1,6 @@
+# TabPFN v2 (Hollmann 2025). Không huấn luyện; chạy với eval_cap nhỏ vì suy luận chậm hơn cây.
+name: tabpfn
+kind: tabpfn
+max_train: 5000
+n_estimators: 4
+batch: 1000

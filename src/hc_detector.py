@@ -28,7 +28,7 @@ class HCDetector:
         det = cls(model, [], m.k, dev)
         rng = np.random.default_rng(seed)
         ytr = sp["y_tr"]
-        for start, stop, lab in ((0, K, ytr), (K, K + T, f2t[ytr])):
+        for start, stop, lab in [(0, K, ytr)] + ([(K, K + T, f2t[ytr])] if T else []):
             cents, index = [], []
             for c in range(stop - start):
                 idx = rng.permutation(np.flatnonzero(lab == c))[: m.index_per_class]
@@ -67,9 +67,26 @@ class HCDetector:
             out[name] = ((-osr).cpu().numpy(), knn.cpu().numpy(), pred.cpu().numpy())
         return out
 
+    @torch.no_grad()
+    def parts(self, Xn):
+        """Thành phần điểm của từng flow: độ tương đồng với tâm và khoảng cách KNN tới mọi lớp, ở từng mức."""
+        e_all = self.embed(Xn)
+        out = {}
+        for name, (heads, cents, index) in zip(("fam", "tac"), self.levels):
+            e = e_all[:, heads]
+            out[f"sim_{name}"] = (e * cents[None]).sum(-1).cpu().numpy()
+            out[f"knn_{name}"] = torch.stack([torch.cat([
+                (1 - e[s, c] @ index[c].T).topk(min(self.k, len(index[c])), largest=False).values[:, -1]
+                for s in _chunks(len(Xn), 4096)]) for c in range(len(index))], 1).cpu().numpy()
+        return out
+
     def unified(self, r, lv):
         (m1, s1), (m2, s2) = self.stats[lv]
         return (r[lv][0] - m1) / s1 + (r[lv][1] - m2) / s2
+
+    def attack(self, Xn):
+        """Điểm tấn công: càng xa tâm lưu lượng bình thường (trong không gian của lớp đó) càng cao."""
+        return -(self.embed(Xn)[:, 0] @ self.levels[0][1][0]).cpu().numpy()
 
     def tiers(self, Xn):
         r = self.raw(Xn)

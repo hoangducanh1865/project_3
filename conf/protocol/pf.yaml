@@ -1,0 +1,4 @@
+# PF: P1 sau khi bỏ các đặc trưng XGBoost dùng nhiều nhất, nghi là đặc trưng đường tắt của dataset [4][5].
+name: pf
+heldout: ???
+drop_top: 10

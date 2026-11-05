@@ -1,0 +1,5 @@
+# PS: P1 với rất ít nhãn: mạng mới chỉ có một lượng nhỏ flow đã gán nhãn để huấn luyện.
+name: ps
+heldout: ???
+n_benign: 5000
+n_per_attack: 50

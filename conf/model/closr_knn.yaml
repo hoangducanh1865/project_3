@@ -1,0 +1,6 @@
+# CLOSR + KNN, không có đầu chiến thuật: đối chứng của HC-CLOSR, cùng encoder và ngân sách huấn luyện.
+defaults:
+  - hc_closr
+  - _self_
+name: closr_knn
+kind: closr_knn

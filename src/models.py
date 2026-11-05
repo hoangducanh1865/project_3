@@ -29,12 +29,42 @@ def _mlp(d_in, hidden, d_out, dropout=0.0):
     return nn.Sequential(*layers), nn.Linear(d, d_out)
 
 
+def _num_embed(m, X, dev):
+    """Embedding cho đặc trưng số (Gorishniy 2022): ple theo phân vị hoặc plr tuần hoàn. -> (module, số chiều vào MLP)."""
+    kind = m.get("num_embed")
+    if not kind:
+        return None, X.shape[1]
+    import rtdl_num_embeddings as rn
+    if kind == "ple":
+        Xb = torch.as_tensor(X[np.random.default_rng(0).permutation(len(X))[:100000]])
+        bins = rn.compute_bins(Xb + 1e-6 * torch.randn_like(Xb), n_bins=m.n_bins)   # nhiễu nhỏ: cột hằng trong mẫu nhỏ
+        emb = rn.PiecewiseLinearEmbeddings(bins, m.d_embedding, activation=True, version="B")
+    else:
+        emb = rn.PeriodicEmbeddings(X.shape[1], m.d_embedding, n_frequencies=m.n_frequencies,
+                                    frequency_init_scale=m.sigma, lite=False)
+    return nn.Sequential(emb, nn.Flatten(1)).to(dev), X.shape[1] * m.d_embedding
+
+
+class _Embedded(nn.Module):
+    def __init__(self, emb, net):
+        super().__init__()
+        self.emb, self.net = emb, net
+
+    def forward(self, x):
+        return self.net(self.emb(x))
+
+
+def _with_embed(emb, net):
+    return net if emb is None else _Embedded(emb, net)
+
+
 # ---------------------------------------------------------------- MLP, MLP+KNN
 def build_mlp(cfg, sp, dev):
     m = cfg.model
     K = len(sp["classes"])
-    body, head = _mlp(sp["X_tr"].shape[1], m.hidden, K, m.dropout)
-    body, head = body.to(dev), head.to(dev)
+    emb, d_in = _num_embed(m, sp["X_tr"], dev)
+    body, head = _mlp(d_in, m.hidden, K, m.dropout)
+    body, head = _with_embed(emb, body.to(dev)), head.to(dev)
     opt = torch.optim.Adam(list(body.parameters()) + list(head.parameters()), lr=m.lr)
     X, y = _t(sp["X_tr"], dev), _t(sp["y_tr"], dev)
     body.train(); head.train()
@@ -54,11 +84,15 @@ def build_mlp(cfg, sp, dev):
             emb.append(e); logits.append(head(e))
         return torch.cat(emb), torch.cat(logits)
 
+    def attack(Xn):
+        return (1 - forward(Xn)[1].softmax(-1)[:, 0]).cpu().numpy()
+
     if m.score == "msp":
         def scorer(Xn):
             _, lg = forward(Xn)
             p = lg.softmax(-1)
             return (1 - p.max(-1).values).cpu().numpy(), p.argmax(-1).cpu().numpy()
+        scorer.attack = attack
         return scorer
 
     # KNN: khoảng cách tới láng giềng thứ k của lớp dự đoán, theo [13]
@@ -83,6 +117,14 @@ def build_mlp(cfg, sp, dev):
                 d = torch.cdist(emb[r], index[c])
                 out[r] = d.topk(k, largest=False).values[:, -1]
         return out.cpu().numpy(), pred.cpu().numpy()
+    scorer.attack = attack
+    return scorer
+
+
+def _as_attack(scorer):
+    """Bộ phát hiện chỉ học lưu lượng bình thường: điểm bất thường cũng là điểm tấn công."""
+    scorer.attack = lambda Xn: scorer(Xn)[0]
+    scorer.parts = lambda Xn: {"attack": scorer(Xn)[0]}
     return scorer
 
 
@@ -99,6 +141,57 @@ def build_xgboost(cfg, sp, dev):
     def scorer(Xn):
         p = clf.predict_proba(Xn)
         return 1 - p.max(1), p.argmax(1)
+    scorer.attack = lambda Xn: 1 - clf.predict_proba(Xn)[:, 0]
+    scorer.parts = lambda Xn: {"proba": clf.predict_proba(Xn).astype(np.float32)}
+    return scorer
+
+
+# ---------------------------------------------------------------- Một đặc trưng
+def build_stump(cfg, sp, dev):
+    """Mức sàn của mọi kịch bản: một đặc trưng duy nhất, chọn trên train theo AUROC benign và tấn công (kiểm tra của Flood 2024)."""
+    from sklearn.metrics import roc_auc_score
+    idx = np.random.default_rng(cfg.seed).permutation(len(sp["X_tr"]))[:200_000]
+    X, y = sp["X_tr"][idx], sp["y_tr"][idx] != 0
+    auc = np.array([roc_auc_score(y, c) if c.std() > 0 else .5 for c in X.T])
+    j = int(np.abs(auc - .5).argmax())
+    sign = 1 if auc[j] >= .5 else -1
+
+    def scorer(Xn):
+        return sign * Xn[:, j], None
+    scorer.attack = lambda Xn: sign * Xn[:, j]
+    scorer.extra = lambda sp_: {"stump_feature": str(sp_["cols"][j]), "stump_train_auroc": float(max(auc[j], 1 - auc[j]))}
+    return scorer
+
+
+# ---------------------------------------------------------------- TabPFN
+def build_tabpfn(cfg, sp, dev):
+    """TabPFN v2 (Hollmann 2025): không huấn luyện, nạp tối đa m.max_train mẫu làm ngữ cảnh.
+
+    TabPFN chỉ hỗ trợ 10 lớp nên học ở mức chiến thuật. Nhãn dự đoán trả về là họ đầu tiên của chiến thuật, chỉ dùng để
+    phân biệt bình thường với tấn công; acc và macro_f1 của mô hình này không có ý nghĩa.
+    """
+    from tabpfn import TabPFNClassifier
+    from tabpfn.constants import ModelVersion
+    m = cfg.model
+    rng = np.random.default_rng(cfg.seed)
+    fam_tac = [tactic_of(c, cfg.dataset.tactics) for c in sp["classes"]]
+    names = ["benign"] + sorted(set(fam_tac) - {"benign"})
+    f2t = np.array([names.index(t) for t in fam_tac])
+    first = np.array([fam_tac.index(t) for t in names])
+    y = f2t[sp["y_tr"]]
+    per = m.max_train // len(names)
+    idx = np.concatenate([rng.permutation(np.flatnonzero(y == c))[:per] for c in range(len(names))])
+    clf = TabPFNClassifier.create_default_for_version(ModelVersion.V2, device=str(dev), n_estimators=m.n_estimators,
+                                                      random_state=cfg.seed, ignore_pretraining_limits=True)
+    clf.fit(sp["X_tr"][idx], y[idx])
+
+    def proba(Xn):
+        return np.concatenate([clf.predict_proba(Xn[s]) for s in _chunks(len(Xn), m.batch)])
+
+    def scorer(Xn):
+        p = proba(Xn)
+        return 1 - p.max(1), first[p.argmax(1)]
+    scorer.attack = lambda Xn: 1 - proba(Xn)[:, 0]
     return scorer
 
 
@@ -110,7 +203,24 @@ def build_iforest(cfg, sp, dev):
     Xb = sp["X_tr"][sp["y_tr"] == 0]
     Xb = Xb[rng.permutation(len(Xb))[: m.max_train]]
     clf = IsolationForest(n_estimators=m.n_estimators, random_state=cfg.seed, n_jobs=-1).fit(Xb)
-    return lambda Xn: (-clf.score_samples(Xn), None)
+
+    def scorer(Xn):
+        return -clf.score_samples(Xn), None
+    return _as_attack(scorer)
+
+
+def build_raw_knn(cfg, sp, dev):
+    """Đối chứng không cần học: khoảng cách tới láng giềng thứ k trong flow bình thường, trên đặc trưng đã chuẩn hoá."""
+    m = cfg.model
+    rng = np.random.default_rng(cfg.seed)
+    Xb = sp["X_tr"][sp["y_tr"] == 0]
+    index = _t(Xb[rng.permutation(len(Xb))[: m.index_per_class]], dev)
+
+    @torch.no_grad()
+    def scorer(Xn):
+        d = [torch.cdist(_t(Xn[s], dev), index).topk(m.k, largest=False).values[:, -1] for s in _chunks(len(Xn), 4096)]
+        return torch.cat(d).cpu().numpy(), None
+    return _as_attack(scorer)
 
 
 # ---------------------------------------------------------------- Autoencoder
@@ -202,8 +312,9 @@ def build_closr(cfg, sp, dev):
     from model.model import CLOSRMLP
     m = cfg.model
     K = len(sp["classes"])
-    model = CLOSRMLP(d_in=sp["X_tr"].shape[1], n_classes=K, d_out=m.d_out, neurons=list(m.neurons),
-                     dropout=m.dropout, residual=False).to(dev)
+    emb, d_in = _num_embed(m, sp["X_tr"], dev)
+    model = _with_embed(emb, CLOSRMLP(d_in=d_in, n_classes=K, d_out=m.d_out, neurons=list(m.neurons),
+                                      dropout=m.dropout, residual=False).to(dev))
     _train_contrastive(model, CLOSRLoss(m=m.margin, squared=True, n_classes=K), sp, m, dev)
 
     # tâm của từng lớp, tính từ không gian embedding riêng của lớp đó
@@ -227,6 +338,40 @@ def build_closr(cfg, sp, dev):
         sims = torch.cat(sims)
         osr = (sims ** 2 * sims.softmax(-1)).sum(-1)  # công thức của eval_closr.py trong [24]
         return (-osr).cpu().numpy(), sims.argmax(-1).cpu().numpy()
+
+    @torch.no_grad()
+    def attack(Xn):
+        return -torch.cat([F.normalize(model(_t(Xn[s], dev))[:, 0], dim=-1) @ centroids[0]
+                           for s in _chunks(len(Xn))]).cpu().numpy()
+
+    @torch.no_grad()
+    def parts(Xn):
+        return {"sim_fam": torch.cat([(F.normalize(model(_t(Xn[s], dev)), dim=-1) * centroids[None]).sum(-1)
+                                      for s in _chunks(len(Xn))]).cpu().numpy()}
+    scorer.attack = attack
+    scorer.parts = parts
+    return scorer
+
+
+def build_closr_knn(cfg, sp, dev):
+    """CLOSR + KNN, không có đầu chiến thuật: đối chứng để tách đóng góp của tầng chiến thuật trong HC-CLOSR."""
+    _repo()
+    from losses.closr_loss import CLOSRLoss
+    from model.model import CLOSRMLP
+    from .hc_detector import HCDetector
+    m = cfg.model
+    K = len(sp["classes"])
+    emb, d_in = _num_embed(m, sp["X_tr"], dev)
+    model = _with_embed(emb, CLOSRMLP(d_in=d_in, n_classes=K, d_out=m.d_out, neurons=list(m.neurons),
+                                      dropout=m.dropout, residual=False).to(dev))
+    _train_contrastive(model, CLOSRLoss(m=m.margin, squared=True, n_classes=K), sp, m, dev)
+    det = HCDetector.fit(model, sp, None, K, 0, m, cfg.seed, dev)
+
+    def scorer(Xn):
+        r = det.raw(Xn)
+        return det.unified(r, "fam"), r["fam"][2]
+    scorer.attack = det.attack
+    scorer.parts = det.parts
     return scorer
 
 
@@ -257,8 +402,9 @@ def build_hc_closr(cfg, sp, dev):
     print(f"  chiến thuật đã biết: {dict(zip(sp['classes'], fam_tac))}", flush=True)
 
     d_in = sp["X_tr"].shape[1]
-    model = CLOSRMLP(d_in=d_in, n_classes=K + T, d_out=m.d_out, neurons=list(m.neurons),
-                     dropout=m.dropout, residual=False).to(dev)
+    emb, d_net = _num_embed(m, sp["X_tr"], dev)
+    model = _with_embed(emb, CLOSRMLP(d_in=d_net, n_classes=K + T, d_out=m.d_out, neurons=list(m.neurons),
+                                      dropout=m.dropout, residual=False).to(dev))
     fam_loss = CLOSRLoss(m=m.margin, squared=True, n_classes=K)
     tac_loss = CLOSRLoss(m=m.margin, squared=True, n_classes=T)
     crit = lambda x, y: fam_loss(x=x[:, :K], y=y) + m.tactic_weight * tac_loss(x=x[:, K:], y=f2t[y])
@@ -296,6 +442,10 @@ def build_hc_closr(cfg, sp, dev):
         sel = tier_ood == 2
         pred_names = np.array(tac_names)[tac_ood]
         res["ood_tactic_acc_tier2"] = float((pred_names[sel] == true_tac[sel]).mean()) if sel.any() else None
+        # chiến thuật hệ thống thật sự báo: tầng 1 theo họ dự đoán, các tầng còn lại theo đầu chiến thuật
+        used = np.where(tier_ood == 1, np.array(fam_tac)[r_ood["fam"][2]], pred_names)
+        res["ood_tactic_acc"] = float((used == true_tac).mean())
+        res["ood_as_benign"] = float((used == "benign").mean())
         # ứng phó cho mỗi cảnh báo OOD bị phát hiện
         L = likelihood(f_ood, det.s_va["fam"])
         acts = [respond(t, p, l, m.impact) for t, p, l in zip(tier_ood, pred_names, L) if t > 1]
@@ -306,11 +456,14 @@ def build_hc_closr(cfg, sp, dev):
 
     scorer.extra = extra
     scorer.detector = det
+    scorer.attack = det.attack
+    scorer.parts = det.parts
     return scorer
 
 
 BUILDERS = {
     "mlp": build_mlp, "xgboost": build_xgboost, "iforest": build_iforest,
     "autoencoder": build_autoencoder, "clad": build_clad, "closr": build_closr,
-    "hc_closr": build_hc_closr,
+    "hc_closr": build_hc_closr, "closr_knn": build_closr_knn, "tabpfn": build_tabpfn, "stump": build_stump,
+    "raw_knn": build_raw_knn,
 }

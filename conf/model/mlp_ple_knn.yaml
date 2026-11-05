@@ -1,0 +1,8 @@
+# MLP với embedding PLE, điểm KNN [13].
+defaults:
+  - mlp_knn
+  - _self_
+name: mlp_ple_knn
+num_embed: ple
+n_bins: 48
+d_embedding: 24
