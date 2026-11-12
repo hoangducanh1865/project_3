@@ -169,7 +169,7 @@ export default function Live({ devices, thr }: { devices: Device[]; thr?: number
 
   const stateText = (i: Incident) => {
     const d = decisionOf(i);
-    if (d === "approved") return "Đã duyệt (mô phỏng)";
+    if (d === "approved") return "Đã duyệt (mô phỏng, lưu trên trình duyệt này)";
     if (d === "rejected") return "Đã từ chối";
     if (i.status === "closed") return "Đã đóng";
     return i.mode === APPROVAL ? "Chờ duyệt" : "Tự động (mô phỏng)";
@@ -309,8 +309,8 @@ export default function Live({ devices, thr }: { devices: Device[]; thr?: number
 
       <footer className="notes">
         <p>
-          Luồng chạy 24/7 trên máy chủ: mỗi phút phát lại flow thật của DataSense (CIC IIoT 2025) chưa dùng để huấn
-          luyện. IP, cổng, thời điểm gốc và tệp PCAP của từng flow giữ nguyên nên kiểm chứng được bằng Wireshark; chỉ
+          Luồng 24 giờ được tính sẵn bằng HC-CLOSR rồi phát lại vòng theo giờ trong ngày: mỗi phút gồm flow thật của
+          DataSense (CIC IIoT 2025) chưa dùng để huấn luyện. IP, cổng, thời điểm gốc và tệp PCAP của từng flow giữ nguyên nên kiểm chứng được bằng Wireshark; chỉ
           thời điểm phát lại và trình tự các pha tấn công là giả lập. Mô hình: HC-CLOSR. Xem trang Dữ liệu và mô hình.
         </p>
         <p>
