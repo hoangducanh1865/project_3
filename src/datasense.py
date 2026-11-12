@@ -30,8 +30,8 @@ CAP_ATTACK, CAP_BENIGN = 3000, 1500   # số flow giữ lại mỗi tệp tấn 
 
 # Họ tấn công: gom các biến thể cùng cơ chế (khác cổng, DoS hay DDoS) thành một họ. Thứ tự quan trọng: khớp mục đầu.
 FAMILIES = [
-    ("synonymousip-flood", "land_flood"), ("syn-flood", "syn_flood"),
-    ("mirai", "mirai"), ("http-flood", "http_flood"), ("mqtt-publish-flood", "mqtt_flood"),
+    ("mirai", "mirai"), ("synonymousip-flood", "land_flood"), ("syn-flood", "syn_flood"),
+    ("http-flood", "http_flood"), ("mqtt-publish-flood", "mqtt_flood"),
     ("slowloris", "slowloris"), ("udp", "udp_flood"), ("icmp", "icmp_flood"),
     ("ack-frag", "tcp_flood"), ("push-ack", "tcp_flood"), ("rst-fin", "tcp_flood"), ("tcp-flood", "tcp_flood"),
     ("connect-flood", "tcp_flood"),
@@ -44,7 +44,8 @@ FAMILIES = [
     ("backdoor-upload", "web_attack"),
 ]
 SPOOFED = ("land_flood", "ip_spoofing")       # IP nguồn bị giả: nhận theo đích là mục tiêu
-WIDE = ("host_discovery", "port_scan", "os_scan", "vuln_scan", "mirai")   # quét hoặc lây lan ra nhiều máy
+# Quét, lây lan, hoặc MITM (giả danh mục tiêu để nói chuyện với máy khác): đầu kia không nhất thiết là mục tiêu
+WIDE = ("host_discovery", "port_scan", "os_scan", "vuln_scan", "mirai", "arp_spoofing", "impersonation")
 ID_COLS = ["src_ip", "dst_ip", "src_mac", "dst_mac", "src_port", "dst_port", "protocol",
            "bidirectional_first_seen_ms", "bidirectional_last_seen_ms"]
 
