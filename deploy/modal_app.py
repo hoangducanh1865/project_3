@@ -3,8 +3,8 @@
 Chạy từ thư mục gốc repo, dùng hồ sơ Modal đang đăng nhập:
   python deploy/setup_modal.py                           # tạo secret từ .env
   PYTHONPATH=. modal run deploy/modal_app.py::main       # dựng CLOSR [16] từ trọng số gốc
-  PYTHONPATH=. modal run deploy/modal_app.py::stream     # dựng kho flow và nạp kịch bản cho luồng giả lập
-  modal volume put project3-model <thư mục> /hc_closr    # nạp HC-CLOSR đã huấn luyện (xem scripts/kaggle)
+  modal volume put project3-model <thư mục> /hc_closr    # nạp HC-CLOSR đã huấn luyện trên DataSense
+  modal volume put project3-model <thư mục> /stream      # kho flow, kịch bản, thẻ mô tả (scripts/build_stream.py)
   PYTHONPATH=. modal deploy deploy/modal_app.py          # triển khai API
   PYTHONPATH=. modal run deploy/modal_app.py::evaluate --hours 72 --out replay.json   # đánh giá tăng tốc
   PYTHONPATH=. modal run deploy/modal_app.py::telegram_test    # gửi một tin thử qua Telegram
@@ -18,8 +18,7 @@ import modal
 CLOSR_SHA = "79da4d1f2a6f4e5ecf92c4588195aaf163df40f8"
 VOL = "/vol"
 MAX_FLOWS = 2000
-HELDOUT = "slowloris"   # họ tấn công bị giấu khi huấn luyện HC-CLOSR (scripts/kaggle/run_hc_closr.py)
-NAMES = {"hc_closr": "HC-CLOSR (đề xuất)", "closr": "CLOSR [16], trọng số gốc"}
+NAMES = {"hc_closr": "HC-CLOSR (đề xuất), DataSense 2025", "closr": "CLOSR [16], trọng số gốc, LYCOS-IDS2017"}
 WEB_URL = "https://project3-ids.vercel.app"
 TIER = {1: "tấn công đã biết", 2: "biến thể của chiến thuật đã biết", 3: "hành vi hoàn toàn mới"}
 TACTIC = {"impact": "Impact", "credential_access": "Credential Access", "initial_access": "Initial Access",
@@ -70,37 +69,8 @@ def main():
     print(prepare_closr.remote(tactics, impact))
 
 
-@app.function(image=prep_image, cpu=4, memory=16384, timeout=1800, volumes={VOL: volume}, secrets=[secret])
-def prepare_stream(ds_conf: dict, scenarios: list):
-    from types import SimpleNamespace
-
-    from huggingface_hub import hf_hub_download
-    from src.data import load_columns, load_csv, make_split
-    from src.simulator import build_pool
-    csv = hf_hub_download("hoangducanh1865/project_3-data", "lycos2017/lycos.csv", repo_type="dataset",
-                          token=os.environ["HF_TOKEN"])
-    ds = SimpleNamespace(**ds_conf, path=csv, cache="/tmp/lycos_cache.npz")
-    X, y = load_csv(ds)
-    columns, rows = load_columns(ds)
-    # cùng seed và họ bị giấu với lúc huấn luyện, không giới hạn số mẫu để lấy trọn tập test
-    sp = make_split(X, y, ds, {"heldout": HELDOUT}, 10 ** 9, 0)
-    os.makedirs(f"{VOL}/stream", exist_ok=True)
-    counts = build_pool(X, y, rows, columns, sp, csv, f"{VOL}/stream/pool.npz")
-    with open(f"{VOL}/stream/scenarios.json", "w") as f:
-        json.dump(scenarios, f, ensure_ascii=False)
-    volume.commit()
-    return counts
-
-
-@app.local_entrypoint()
-def stream():
-    from pathlib import Path
-
-    import yaml
-    root = Path(__file__).resolve().parents[1]
-    conf = yaml.safe_load((root / "conf/dataset/lycos.yaml").read_text())
-    keys = ("label_col", "benign", "drop_cols", "rare_threshold", "max_per_class")
-    print(prepare_stream.remote({k: conf[k] for k in keys}, json.loads((root / "deploy/scenarios.json").read_text())))
+# Kho flow DataSense (pool.npz), kịch bản và thẻ mô tả (card.json) dựng trên Colab bằng scripts/build_stream.py,
+# rồi nạp bằng: modal volume put project3-model <thư mục> /stream
 
 
 def send_telegram(text):
@@ -152,8 +122,16 @@ def tick():
     X, flows, ended = simulator.tick(sim, minute, np.random.default_rng(minute))
     if sim.get("active") and not before:
         c = sim["active"]
-        state["campaigns"].append({k: c[k] for k in ("id", "name", "narrative", "start", "scenario")})
-    opened = step(state, flows, det.analyze(X), minute, det.info["impact"], ended)
+        state["campaigns"].append({k: c[k] for k in ("id", "name", "narrative", "start", "scenario")}
+                                  | {"files": [p["file"] for p in c["phases"]]})
+    results = det.analyze(X)
+    for f, r in zip(flows, results):     # bằng chứng kỹ thuật cho flow bị cảnh báo
+        if r["status"] == "alert":
+            f.update(simulator.evidence(f["row"]), score=r["score"])
+    opened = step(state, flows, results, minute, det.info["impact"], ended)
+    card = json.load(open(f"{VOL}/stream/card.json"))
+    if store.get("card", {}).get("version") != card.get("version"):
+        store["card"] = card
     for inc in to_notify(state["incidents"])[:MAX_NOTIFY]:
         if not send_telegram(message(inc, TIER, TACTIC, WEB_URL)):
             break
@@ -240,6 +218,11 @@ def live():
         incidents = [{**i, "decision": decisions.get(i["id"])} for i in store.get("incidents", [])]
         return {"updated": store.get("updated", None), "summary": store.get("summary", None),
                 "series": store.get("series", [])[-60:], "incidents": incidents[::-1][:100]}
+
+    @api.get("/card")
+    def card():
+        """Thẻ mô tả dữ liệu, cách gán nhãn, mô hình và chỉ số kiểm thử để người xem tự đánh giá độ tin cậy."""
+        return store.get("card", {})
 
     @api.post("/decide")
     def decide(body: Decision):

@@ -1,13 +1,15 @@
 "use client";
 
-import { Activity, CircleHelp, FileSearch, ShieldCheck } from "lucide-react";
+import { Activity, CircleHelp, Database, FileSearch, ShieldCheck } from "lucide-react";
 import { useEffect, useState } from "react";
 import Batch from "./batch";
+import CardPage, { useCard } from "./card";
 import Live from "./live";
 import { startTour, TOUR_KEY } from "./tour";
 
 export default function Page() {
-  const [tab, setTab] = useState<"live" | "batch">("live");
+  const [tab, setTab] = useState<"live" | "batch" | "card">("live");
+  const { card, error } = useCard();
 
   useEffect(() => {        // tự mở hướng dẫn một lần cho người mới, chờ dữ liệu đầu tiên về
     if (localStorage.getItem(TOUR_KEY)) return;
@@ -33,13 +35,17 @@ export default function Page() {
           <button aria-current={tab === "batch" ? "page" : undefined} onClick={() => setTab("batch")}>
             <FileSearch size={15} aria-hidden="true" />Phân tích file
           </button>
+          <button aria-current={tab === "card" ? "page" : undefined} onClick={() => setTab("card")}>
+            <Database size={15} aria-hidden="true" />Dữ liệu và mô hình
+          </button>
         </nav>
         <button className="ghost" data-tour="help" onClick={() => startTour(setTab)}>
           <CircleHelp size={15} aria-hidden="true" />Hướng dẫn
         </button>
       </header>
-      <div hidden={tab !== "live"}><Live /></div>
+      <div hidden={tab !== "live"}><Live devices={card?.devices ?? []} thr={card?.model?.threshold.value} /></div>
       <div hidden={tab !== "batch"}><Batch /></div>
+      <div hidden={tab !== "card"}><CardPage card={card} error={error} /></div>
     </>
   );
 }

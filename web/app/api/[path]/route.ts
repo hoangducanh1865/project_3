@@ -6,7 +6,7 @@ export const maxDuration = 60; // máy chủ Modal có thể cần thời gian k
 // đường dẫn công khai -> biến chứa địa chỉ API và đường dẫn trên API
 const ROUTES: Record<string, [string, string]> = {
   meta: ["MODAL_API_URL", "meta"], samples: ["MODAL_API_URL", "samples"], analyze: ["MODAL_API_URL", "analyze"],
-  live: ["MODAL_LIVE_URL", "state"], decide: ["MODAL_LIVE_URL", "decide"],
+  live: ["MODAL_LIVE_URL", "state"], decide: ["MODAL_LIVE_URL", "decide"], card: ["MODAL_LIVE_URL", "card"],
 };
 
 type Ctx = { params: Promise<{ path: string }> };
@@ -27,6 +27,7 @@ async function forward(req: NextRequest, ctx: Ctx) {
     cache: "no-store",
   });
   const headers: Record<string, string> = { "content-type": res.headers.get("content-type") ?? "application/json" };
+  if (path === "card") headers["cache-control"] = "public, s-maxage=300";
   if (path === "live") headers["cache-control"] = "public, s-maxage=10"; // nhiều người xem chỉ gọi Modal một lần
   return new NextResponse(res.body, { status: res.status, headers });
 }

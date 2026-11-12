@@ -2,7 +2,7 @@
 
 import { CircleCheck, Clock, ShieldAlert } from "lucide-react";
 import type { ReactNode } from "react";
-import { APPROVAL } from "./labels";
+import { APPROVAL, d3fendUrl } from "./labels";
 
 export function LevelBadge({ level }: { level: string }) {
   return <span className={`level ${level}`}>{level}</span>;
@@ -57,15 +57,20 @@ export function ResponsePanel({ title, plan, facts, note, footer }: {
       </div>
 
       <h4>Biện pháp ngay (D3FEND)</h4>
-      <ul>{plan.d3fend_now.map((m) => <li key={m}>{m}</li>)}</ul>
+      <ul>{plan.d3fend_now.map((m) => <li key={m}><Measure m={m} /></li>)}</ul>
       {plan.d3fend_later.length > 0 && (
         <>
           <h4>Củng cố sau</h4>
-          <ul>{plan.d3fend_later.map((m) => <li key={m}>{m}</li>)}</ul>
+          <ul>{plan.d3fend_later.map((m) => <li key={m}><Measure m={m} /></li>)}</ul>
         </>
       )}
       {note && <p className="note">{note}</p>}
       {plan.mode === APPROVAL && footer && <div className="decision" data-tour="decision">{footer}</div>}
     </>
   );
+}
+
+function Measure({ m }: { m: string }) {
+  const url = d3fendUrl(m);
+  return url ? <a href={url} target="_blank" rel="noreferrer">{m}</a> : <>{m}</>;
 }

@@ -34,9 +34,12 @@ def export(cfg, scorer, sp, y, res):
     torch.save(det.state(), os.path.join(cfg.artifact_dir, "model.pt"))
 
     idx = pick_samples(y, sp, cfg.seed)
-    want = set(rows[idx].tolist())
-    keep = lambda i: i != 0 and i - 1 not in want   # dòng 0 là tiêu đề
-    df = pd.read_csv(cfg.dataset.path, skiprows=keep)
+    if str(cfg.dataset.path).endswith(".parquet"):
+        df = pd.read_parquet(cfg.dataset.path).iloc[np.sort(rows[idx])]
+    else:
+        want = set(rows[idx].tolist())
+        keep = lambda i: i != 0 and i - 1 not in want   # dòng 0 là tiêu đề
+        df = pd.read_csv(cfg.dataset.path, skiprows=keep)
     df.to_json(os.path.join(cfg.artifact_dir, "samples.json"), orient="split", index=False)
     with open(os.path.join(cfg.artifact_dir, "metrics.json"), "w") as f:
         json.dump(det.info["metrics"], f, ensure_ascii=False, indent=2, default=str)

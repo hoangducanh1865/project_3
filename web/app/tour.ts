@@ -2,7 +2,7 @@ import { driver, type DriveStep } from "driver.js";
 import "driver.js/dist/driver.css";
 
 export const TOUR_KEY = "tour-da-xem";
-type Tab = "live" | "batch";
+type Tab = "live" | "batch" | "card";
 
 const pick = <T extends HTMLElement>(s: string) => document.querySelector<T>(s);
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));

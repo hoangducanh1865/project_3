@@ -2,7 +2,8 @@
 
 import { Bell, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { APPROVAL, TACTIC, TIER } from "./labels";
+import { APPROVAL, attackUrl, FAMILY, famName, num, PROTO, TACTIC, TIER } from "./labels";
+import Topology, { type Device } from "./topology";
 import { LevelBadge, ResponsePanel, Stat, StateText } from "./ui";
 
 type Incident = {
@@ -10,6 +11,11 @@ type Incident = {
   status: "open" | "closed"; truth: Record<string, number>; campaign: number | null; family: string;
   tier: number; tactic: string; L: number; I: number; R: number; level: string; action: string; reversible: boolean;
   mode: string; d3fend_now: string[]; d3fend_later: string[]; decision: Decision | null;
+  evidence?: Evidence[]; files?: string[];
+};
+type Evidence = {
+  sport: number; dport: number; proto: number; t0: number; t1: number; file: string; score: number;
+  feat: Record<string, number>; top: { name: string; value: number; median: number; z: number }[];
 };
 type Decision = "approved" | "rejected";
 type Point = { t: number; flows: number; alerts: number };
@@ -66,7 +72,49 @@ function AlertChart({ points }: { points: Point[] }) {
   );
 }
 
-export default function Live() {
+const utc = (ms: number) => new Date(ms).toISOString().replace("T", " ").slice(0, 23);
+const big = (x: number) => (Math.abs(x) >= 1000 ? Math.round(x).toLocaleString("vi-VN") : num(x, Number.isInteger(x) ? 0 : 2));
+
+/** Bằng chứng kỹ thuật: flow gốc, điểm so với ngưỡng, đặc trưng lệch nhiều nhất, cách tự kiểm chứng bằng Wireshark. */
+function EvidencePanel({ inc, thr }: { inc: Incident; thr?: number }) {
+  const ev = inc.evidence ?? [];
+  if (!ev.length) return null;
+  const t0 = Math.min(...ev.map((e) => e.t0)), t1 = Math.max(...ev.map((e) => e.t1));
+  const filter = `ip.addr==${inc.src} && ip.addr==${inc.dst} && frame.time_epoch>=${(t0 / 1000).toFixed(3)} && frame.time_epoch<=${(t1 / 1000 + 0.001).toFixed(3)}`;
+  const top = ev[0].top;
+  return (
+    <div className="ev-block">
+      <h4>Bằng chứng kỹ thuật ({ev.length} flow bị cảnh báo gần nhất)</h4>
+      <div className="scroll" style={{ maxHeight: 220 }}>
+        <table className="evidence">
+          <thead><tr><th>Thời điểm gốc (UTC)</th><th>Cổng</th><th>Gói</th><th>Byte</th><th>ms</th><th>SYN/RST/FIN</th><th>Điểm OOD</th></tr></thead>
+          <tbody>{ev.map((e, k) => (
+            <tr key={k}>
+              <td className="addr">{utc(e.t0)}</td>
+              <td className="addr">{PROTO[e.proto] ?? e.proto} {e.sport}→{e.dport}</td>
+              <td className="num">{big(e.feat.bidirectional_packets)}</td>
+              <td className="num">{big(e.feat.bidirectional_bytes)}</td>
+              <td className="num">{big(e.feat.bidirectional_duration_ms)}</td>
+              <td className="num">{e.feat.bidirectional_syn_packets}/{e.feat.bidirectional_rst_packets}/{e.feat.bidirectional_fin_packets}</td>
+              <td className="num">{num(e.score, 2)}</td>
+            </tr>))}
+          </tbody>
+        </table>
+      </div>
+      {thr !== undefined && <p className="note">Ngưỡng điểm OOD: {num(thr)} (phân vị 95 trên flow đã biết). Điểm lớn hơn ngưỡng là hành vi chưa học.</p>}
+      <h4>Đặc trưng lệch nhiều nhất so với flow bình thường</h4>
+      <ul>{top.map((t) => (
+        <li key={t.name}><code>{t.name}</code> = {big(t.value)}, trung vị bình thường {big(t.median)} (lệch {num(t.z, 1)} IQR)</li>
+      ))}</ul>
+      <h4>Tự kiểm chứng trên gói tin gốc</h4>
+      <p className="note" style={{ marginTop: 2 }}>Mở tệp PCAP của DataSense bằng Wireshark, dán bộ lọc:</p>
+      <code className="code">{inc.files?.map((f) => `${f}.pcap`).join(", ")}</code>
+      <code className="code">{filter}</code>
+    </div>
+  );
+}
+
+export default function Live({ devices, thr }: { devices: Device[]; thr?: number }) {
   const [state, setState] = useState<State | null>(null);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState<Filter>("open");
@@ -133,6 +181,9 @@ export default function Live() {
   const shown = incidents.filter((i) => filter === "all" || (filter === "open" ? i.status === "open" : isPending(i)));
   const current = incidents.find((i) => i.id === selected) ?? null;
   const s = state?.summary;
+  const names = Object.fromEntries(devices.map((d) => [d.ip, d.device_name]));
+  const links = incidents.filter((i) => i.status === "open" || i.id === selected)
+    .map((i) => ({ id: i.id, src: i.src, dst: i.dst, on: i.id === selected }));
   const stale = state?.updated ? Date.now() / 1000 - state.updated > STALE_S : false;
 
   const tabs: [Filter, string, number][] = [
@@ -183,6 +234,12 @@ export default function Live() {
 
       {state && state.series.length > 0 && <section className="card" data-tour="chart"><AlertChart points={state.series} /></section>}
 
+      {devices.length > 0 && (
+        <section className="card" data-tour="topology">
+          <Topology devices={devices} links={links} onPick={(id) => { setFilter("all"); setSelected(id); }} />
+        </section>
+      )}
+
       <div className="workspace">
         <section className="card flush" data-tour="incidents">
           <div className="card-head">
@@ -205,8 +262,8 @@ export default function Live() {
                     onKeyDown={(e) => { if (e.key === "Enter") setSelected(i.id); }}>
                     <td><LevelBadge level={i.level} /></td>
                     <td className="num">{clock(i.opened)}</td>
-                    <td className="addr">{i.src}</td>
-                    <td className="addr">{i.dst}</td>
+                    <td className="addr" title={names[i.src]}>{i.src}</td>
+                    <td className="addr" title={names[i.dst]}>{i.dst}</td>
                     <td>Tầng {i.tier} · {short(i.tactic)}</td>
                     <td className="num right">{i.alerts}/{i.flows}</td>
                     <td><StateText text={stateText(i)} /></td>
@@ -224,13 +281,16 @@ export default function Live() {
               title={TACTIC[current.tactic] ?? current.tactic}
               plan={current}
               facts={[
-                ["Kết nối", <span className="addr" key="k">{current.src} → {current.dst}</span>],
+                ["Kết nối", <span key="k"><span className="addr">{current.src}</span> ({names[current.src] ?? "ngoài danh mục"}) → <span className="addr">{current.dst}</span> ({names[current.dst] ?? "ngoài danh mục"})</span>],
                 ["Thời gian", `${clock(current.opened)} đến ${clock(current.last)}`],
                 ["Phân tầng", `Tầng ${current.tier}: ${TIER[current.tier]}`],
-                [current.tier === 1 ? "Họ tấn công" : "Họ gần nhất", current.family],
+                [current.tier === 1 ? "Họ tấn công" : "Họ gần nhất", <span key="f">{famName(current.family)}{FAMILY[current.family]?.[1] && <> · <a href={attackUrl(FAMILY[current.family][1])} target="_blank" rel="noreferrer">ATT&amp;CK {FAMILY[current.family][1]}</a></>}</span>],
                 ["Cảnh báo", `${current.alerts} trên ${current.flows} flow`],
               ]}
-              note={`Nhãn giả lập: ${Object.keys(current.truth).length ? Object.keys(current.truth).join(", ") : "không có tấn công, đây là báo nhầm"} (chỉ để đối chiếu, mô hình không dùng)`}
+              note={<>
+                <EvidencePanel inc={current} thr={thr} />
+                <p className="note">Nhãn đã gán lại của các flow này: {Object.keys(current.truth).length ? Object.keys(current.truth).map(famName).join(", ") : "bình thường, đây là báo nhầm"} (chỉ để đối chiếu, mô hình không dùng).</p>
+              </>}
               footer={decisionOf(current) ? (
                 <>
                   <StateText text={stateText(current)} />
@@ -249,9 +309,9 @@ export default function Live() {
 
       <footer className="notes">
         <p>
-          Dữ liệu mô phỏng chạy 24/7 trên máy chủ, tính cả khi không mở trang: mỗi phút phát lại flow thật của
-          LYCOS-IDS2017 chưa dùng để huấn luyện, theo kịch bản tấn công do Gemini soạn. Trình tự tấn công và địa chỉ IP là
-          giả lập. Mô hình: HC-CLOSR.
+          Luồng chạy 24/7 trên máy chủ: mỗi phút phát lại flow thật của DataSense (CIC IIoT 2025) chưa dùng để huấn
+          luyện. IP, cổng, thời điểm gốc và tệp PCAP của từng flow giữ nguyên nên kiểm chứng được bằng Wireshark; chỉ
+          thời điểm phát lại và trình tự các pha tấn công là giả lập. Mô hình: HC-CLOSR. Xem trang Dữ liệu và mô hình.
         </p>
         <p>
           Sự cố chỉ mở khi một cặp nguồn và đích có từ 5 cảnh báo trong 5 phút và tỉ lệ cảnh báo từ 30% trở lên. Trong 24

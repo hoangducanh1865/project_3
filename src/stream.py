@@ -17,8 +17,13 @@ KEEP_INCIDENTS, KEEP_SERIES, KEEP_CAMPAIGNS = 300, 1440, 200
 NOTIFY_LEVELS = ("M3", "M4")    # chỉ báo ra ngoài web từ mức này
 
 
+KEEP_EVIDENCE = 6   # số flow cảnh báo giữ lại làm bằng chứng cho mỗi sự cố
+EV_KEYS = ("sport", "dport", "proto", "t0", "t1", "file", "feat", "top", "score")
+
+
 def empty_pair():
-    return {"flows": 0, "alerts": 0, "L": 0, "tier": {}, "tactic": {}, "family": {}, "truth": {}, "campaign": None}
+    return {"flows": 0, "alerts": 0, "L": 0, "tier": {}, "tactic": {}, "family": {}, "truth": {}, "campaign": None,
+            "ev": []}
 
 
 def add(counter, key, n=1):
@@ -40,6 +45,8 @@ def pair_stats(flows, results):
             add(p["tier"], str(r["tier"]))
             add(p["tactic"], r["tactic"])
             add(p["family"], r["family"])
+            if len(p["ev"]) < KEEP_EVIDENCE and "feat" in f:
+                p["ev"].append({k: f[k] for k in EV_KEYS if k in f})
     return pairs
 
 
@@ -54,6 +61,7 @@ def merge(recent):
                 for name, n in p[k].items():
                     add(t[k], name, n)
             t["campaign"] = p["campaign"] or t["campaign"]
+            t["ev"] = (t["ev"] + p.get("ev", []))[-KEEP_EVIDENCE:]
     return total
 
 
@@ -90,6 +98,9 @@ def update_incidents(incidents, recent, tick_pairs, minute, impact):
             if view["R"] > inc["R"]:    # chỉ nâng mức, không tự hạ khi sự cố còn mở
                 inc.update(view)
         inc["family"] = max(p["family"], key=p["family"].get)
+        if p["ev"]:
+            inc["evidence"] = p["ev"]
+            inc["files"] = sorted({e["file"] for e in p["ev"]} | set(inc.get("files", [])))[:5]
         inc["truth"] = {**inc["truth"], **p["truth"]}
         inc["campaign"] = p["campaign"] or inc["campaign"]
     for inc in incidents:
