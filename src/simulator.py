@@ -49,7 +49,8 @@ def build_pool(X, y, rows, columns, sp, path, table, seed=0, cap_benign=20000, c
     idx = np.unique(np.concatenate([idx, bg]))
     meta = meta_all.iloc[rows[idx]]
     arrays = {("pcap" if k == "file" else k):   # "file" trùng tên tham số của np.savez
-              meta[k].astype(str if k in ("src_ip", "dst_ip", "file", "rule") else np.int64).to_numpy() for k in META}
+              (meta[k].to_numpy().astype(str) if k in ("src_ip", "dst_ip", "file", "rule")
+               else meta[k].to_numpy().astype(np.int64)) for k in META}
     np.savez(path, X=X[idx], y=y[idx], columns=np.array(columns), **arrays)
     return {str(c): int(n) for c, n in zip(*np.unique(y[idx], return_counts=True))}
 
