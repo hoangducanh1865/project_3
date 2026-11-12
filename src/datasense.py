@@ -32,11 +32,12 @@ CAP_ATTACK, CAP_BENIGN = 3000, 1500   # số flow giữ lại mỗi tệp tấn 
 FAMILIES = [
     ("mirai", "mirai"), ("synonymousip-flood", "land_flood"), ("syn-flood", "syn_flood"),
     ("http-flood", "http_flood"), ("mqtt-publish-flood", "mqtt_flood"),
-    ("slowloris", "slowloris"), ("udp", "udp_flood"), ("icmp", "icmp_flood"),
-    ("ack-frag", "tcp_flood"), ("push-ack", "tcp_flood"), ("rst-fin", "tcp_flood"), ("tcp-flood", "tcp_flood"),
-    ("connect-flood", "tcp_flood"),
+    ("slowloris", "slowloris"),
     ("host-disc-arp-ping", None),   # chỉ có gói ARP, không tạo flow IP nên bỏ
     ("host-disc", "host_discovery"), ("ping-sweep", "host_discovery"),
+    ("udp", "udp_flood"), ("icmp", "icmp_flood"),
+    ("ack-frag", "tcp_flood"), ("push-ack", "tcp_flood"), ("rst-fin", "tcp_flood"), ("tcp-flood", "tcp_flood"),
+    ("connect-flood", "tcp_flood"),
     ("port-scan", "port_scan"), ("os-scan", "os_scan"), ("vuln-scan", "vuln_scan"),
     ("dictionary-ssh", "ssh_bruteforce"), ("dictionary-telnet", "telnet_bruteforce"),
     ("arp-spoofing", "arp_spoofing"), ("impersonation", "impersonation"), ("ip-spoofing", "ip_spoofing"),
@@ -227,8 +228,14 @@ def build(out, benign_frac=1.0):
     parts = [pd.read_parquet(f"{out}/{f}") for f in sorted(os.listdir(out)) if f.startswith("flows_")]
     df = pd.concat(parts, ignore_index=True)
     df = df[df.label.notna()]
+    # tính lại họ từ tên tấn công gốc theo FAMILIES hiện tại (sửa thứ tự khớp không cần trích lại PCAP)
+    att = df.label != "benign"
+    df.loc[att, "label"] = df.loc[att, "cic_label"].map(family_of)
+    df = df[df.label.notna()]
     df.to_parquet(f"{out}/datasense_flows.parquet", index=False)
-    rel = pd.concat([pd.read_csv(f"{out}/{f}") for f in os.listdir(out) if f.startswith("relabel_")])
+    rel = pd.concat([pd.read_csv(f"{out}/{f}") for f in os.listdir(out) if f.startswith("relabel_") and f != "relabel_all.csv"])
+    att = rel.label.notna() & (rel.label != "benign")
+    rel.loc[att, "label"] = rel.loc[att, "file"].str.split("_").str[2].map(family_of)
     rel.to_csv(f"{out}/relabel_all.csv", index=False)
     print(df.label.value_counts().to_string())
 
