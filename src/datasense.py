@@ -10,6 +10,7 @@ Chạy trên Colab (cần mạng, khoảng 100 GB đĩa tạm):
 Cần biến CIC_FORM (JSON các trường của form tải trên cicresearch.ca), đặt trong /root/.secrets, không đưa vào repo.
 """
 import argparse
+import io
 import json
 import os
 import subprocess
@@ -21,7 +22,6 @@ import numpy as np
 import pandas as pd
 
 BASE = "https://cicresearch.ca/IOTDataset/Datasense"
-DOCS = "https://datasense-docs.pages.dev"
 CATS = ["bruteforce", "web", "recon", "mitm", "malware", "dos", "ddos", "benign"]
 SLACK_MS = 2000            # dung sai đồng hồ khi so thời điểm flow với cửa sổ tấn công
 MAX_PACKETS = 3_000_000    # tệp ngập lụt có tới 8 triệu gói trong 60 giây: chỉ đọc phần đầu
@@ -66,9 +66,11 @@ def session():
     return s
 
 
-def inventory():
-    devices = pd.read_csv(f"{DOCS}/devices.csv")
-    attacks = pd.read_csv(f"{DOCS}/attacks.csv")
+def inventory(sess):
+    """devices.csv và attacks.csv trong thư mục docs chính thức của bộ dữ liệu."""
+    get = lambda name: pd.read_csv(io.BytesIO(sess.get(f"{BASE}/download.php?file=docs%2Fsite%2F{name}",
+                                                       timeout=120).content))
+    devices, attacks = get("devices.csv"), get("attacks.csv")
     devices["mac"] = devices["mac"].str.lower()
     # Một tệp có thể có nhiều dòng (mỗi máy tấn công một dòng): gộp thành cửa sổ rộng nhất.
     attacks = (attacks.groupby("filename", as_index=False)
@@ -162,12 +164,12 @@ def members(sess, cat):
 
 def run(out, cats, workers):
     os.makedirs(out, exist_ok=True)
-    devices, attacks = inventory()
+    sess = session()
+    devices, attacks = inventory(sess)
     devices.to_csv(f"{out}/devices.csv", index=False)
     attacks.to_csv(f"{out}/attacks.csv", index=False)
     meta = attacks.set_index("filename", drop=False)
     tmp = tempfile.mkdtemp(dir=os.environ.get("TMP_PCAP", "/content"))
-    sess = session()
     for cat in cats:
         if os.path.exists(f"{out}/flows_{cat}.parquet"):
             continue
