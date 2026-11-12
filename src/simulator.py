@@ -31,16 +31,16 @@ def build_pool(X, y, rows, columns, sp, path, table, seed=0, cap_benign=40000):
     ben = te[y[te] == "benign"]
     idx = np.concatenate([rng.permutation(ben)[:cap_benign], te[y[te] != "benign"], ood])
     meta = pd.read_parquet(table, columns=META).iloc[rows[idx]]
-    np.savez(path, X=X[idx], y=y[idx], columns=np.array(columns),
-             **{k: meta[k].astype(str if k in ("src_ip", "dst_ip", "file", "rule") else np.int64).to_numpy()
-                for k in META})
+    arrays = {("pcap" if k == "file" else k):   # "file" trùng tên tham số của np.savez
+              meta[k].astype(str if k in ("src_ip", "dst_ip", "file", "rule") else np.int64).to_numpy() for k in META}
+    np.savez(path, X=X[idx], y=y[idx], columns=np.array(columns), **arrays)
     return {str(c): int(n) for c, n in zip(*np.unique(y[idx], return_counts=True))}
 
 
 class Simulator:
     def __init__(self, pool, scenarios):
         self.p = {k: pool[k] for k in pool.files}
-        y, files = self.p["y"], self.p["file"]
+        y, files = self.p["y"], self.p["pcap"]
         cols = self.p["columns"].tolist()
         self.show = [cols.index(c) for c in SHOW if c in cols]
         self.show_names = [c for c in SHOW if c in cols]
@@ -60,7 +60,9 @@ class Simulator:
             fams = {str(y[i]) for i in idx} - {"benign"}
             for fam in fams:
                 self.files_of.setdefault(fam, []).append(f)
-        self.scenarios = [s for s in scenarios if all(p["family"] in self.files_of for p in s["phases"])]
+        # bỏ pha có họ không có trong kho (ví dụ họ chỉ có trong phần tệp DoS chưa đọc), bỏ kịch bản không còn pha nào
+        self.scenarios = [{**s, "phases": ph} for s in scenarios
+                          if (ph := [p for p in s["phases"] if p["family"] in self.files_of])]
 
     def flow(self, i, campaign=None):
         p = self.p
@@ -68,7 +70,7 @@ class Simulator:
         return {"src": str(p["src_ip"][i]), "dst": str(p["dst_ip"][i]), "sport": int(p["src_port"][i]),
                 "dport": int(p["dst_port"][i]), "proto": int(p["protocol"][i]),
                 "t0": int(p["bidirectional_first_seen_ms"][i]), "t1": int(p["bidirectional_last_seen_ms"][i]),
-                "file": str(p["file"][i]), "truth": None if truth == "benign" else truth, "campaign": campaign,
+                "file": str(p["pcap"][i]), "truth": None if truth == "benign" else truth, "campaign": campaign,
                 "row": int(i)}
 
     def evidence(self, i):
