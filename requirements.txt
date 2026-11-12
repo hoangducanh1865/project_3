@@ -6,3 +6,6 @@ xgboost>=2.0
 gdown
 kaggle
 tabpfn
+nfstream
+pyarrow
+requests

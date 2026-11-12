@@ -21,6 +21,8 @@ def tactic_of(name, tactics):
 def _read_table(ds):
     """Đọc CSV. Với file rất lớn (ds.benign_frac): đọc từng phần, chỉ giữ một tỉ lệ lưu lượng bình thường."""
     frac = ds.get("benign_frac")
+    if str(ds.path).endswith(".parquet"):
+        return pd.read_parquet(ds.path)
     if not frac:
         return pd.read_csv(ds.path)
     rng = np.random.default_rng(0)

@@ -1,0 +1,21 @@
+# DataSense: CIC IIoT 2025 (Firouzi 2025), 45 thiết bị, thu tháng 1-9/2025. Flow tự trích từ PCAP gốc bằng NFStream và
+# gán nhãn lại theo từng flow (src/datasense.py). Xem datasets/README.md.
+name: datasense
+path: ${oc.env:DATASENSE_PARQUET,data/datasense/datasense_flows.parquet}
+cache: ${oc.env:CACHE_DIR,/tmp}/datasense_cache.npz
+label_col: label
+benign: benign
+# Cột định danh và nguồn gốc: giữ trong tệp để web truy nguồn, không đưa vào mô hình.
+drop_cols: [id, expiration_id, src_ip, src_mac, src_oui, src_port, dst_ip, dst_mac, dst_oui, dst_port, protocol,
+            ip_version, vlan_id, tunnel_id, bidirectional_first_seen_ms, bidirectional_last_seen_ms,
+            src2dst_first_seen_ms, src2dst_last_seen_ms, dst2src_first_seen_ms, dst2src_last_seen_ms,
+            application_is_guessed, application_confidence, rule, file, cic_label, category]
+rare_threshold: 100
+max_per_class: 100000
+stack_features: []   # NFStream không xuất TTL hay cửa sổ TCP
+# Họ tấn công (src/datasense.py: FAMILIES) sang chiến thuật ATT&CK. Bảng do đề tài lập.
+tactics:
+  impact: [land_flood, syn_flood, tcp_flood, udp_flood, icmp_flood, http_flood, mqtt_flood, slowloris, mirai]  # T1498, T1499
+  discovery: [host_discovery, port_scan, os_scan, vuln_scan]                                                  # T1046, T1018
+  credential_access: [bruteforce, arp_spoofing, impersonation, ip_spoofing]                                   # T1110, T1557
+  initial_access: [web_attack]                                                                                # T1190
