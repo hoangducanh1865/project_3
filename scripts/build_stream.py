@@ -33,7 +33,7 @@ RULES = [
 
 def relabel_table(data):
     r = pd.read_csv(f"{data}/relabel_all.csv")
-    r["cat"] = r.file.str.split("_").str[1]
+    r["cat"] = r.file.str.split("_").str[1].where(~r.file.str.startswith("benign"), "benign")
     out = []
     for cat, g in r.groupby("cat"):
         tot = int(g.n.sum())
