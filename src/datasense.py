@@ -179,7 +179,7 @@ def members(sess, cat, minutes):
 
 def run(out, cats, workers, minutes):
     os.makedirs(out, exist_ok=True)
-    sess = Session(f"{out}/.cookies")
+    sess = Session(f"{out}/.cookies_{'_'.join(cats)}")   # server chỉ cho mỗi phiên tải một tệp một lúc
     devices, attacks = inventory(sess)
     devices.to_csv(f"{out}/devices.csv", index=False)
     attacks.to_csv(f"{out}/attacks.csv", index=False)
