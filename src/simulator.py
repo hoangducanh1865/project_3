@@ -24,13 +24,30 @@ def benign_rate(minute):
     return 60 + 120 * max(0.0, math.sin(math.pi * (hour - 7) / 12))
 
 
-def build_pool(X, y, rows, columns, sp, path, table, seed=0, cap_benign=40000):
+def build_pool(X, y, rows, columns, sp, path, table, seed=0, cap_benign=20000, cap_family=8000):
     """Kho flow cho web: chỉ lấy flow không dùng để huấn luyện (known-test và họ bị giấu), kèm định danh gốc."""
     rng = np.random.default_rng(seed)
     te, ood = sp["idx_te"], sp["idx_ood"]
     ben = te[y[te] == "benign"]
-    idx = np.concatenate([rng.permutation(ben)[:cap_benign], te[y[te] != "benign"], ood])
-    meta = pd.read_parquet(table, columns=META).iloc[rows[idx]]
+    meta_all = pd.read_parquet(table, columns=META)
+    pcap = meta_all["file"].to_numpy()[rows]
+    att = np.concatenate([te[y[te] != "benign"], ood])
+    picks = [rng.permutation(ben)[:cap_benign]]
+    for fam in np.unique(y[att]):     # mỗi họ lấy trọn vài tệp PCAP tới khi đủ cap_family flow
+        a = att[y[att] == fam]
+        got = 0
+        for f in rng.permutation(np.unique(pcap[a])):
+            if got >= cap_family:
+                break
+            part = a[pcap[a] == f]
+            picks.append(part)
+            got += len(part)
+    idx = np.concatenate(picks)
+    # thêm flow nền (bình thường) của chính các tệp đã chọn để phát lại đúng bối cảnh
+    chosen = set(pcap[idx].tolist())
+    bg = ben[np.isin(pcap[ben], list(chosen))]
+    idx = np.unique(np.concatenate([idx, bg]))
+    meta = meta_all.iloc[rows[idx]]
     arrays = {("pcap" if k == "file" else k):   # "file" trùng tên tham số của np.savez
               meta[k].astype(str if k in ("src_ip", "dst_ip", "file", "rule") else np.int64).to_numpy() for k in META}
     np.savez(path, X=X[idx], y=y[idx], columns=np.array(columns), **arrays)
