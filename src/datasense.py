@@ -16,6 +16,7 @@ import os
 import subprocess
 import tarfile
 import tempfile
+import time
 from concurrent.futures import FIRST_COMPLETED, ProcessPoolExecutor, wait
 
 import numpy as np
@@ -55,21 +56,31 @@ def family_of(attack_name):
     raise ValueError(f"chưa xếp họ cho {attack_name}")
 
 
-def session():
-    """Phiên HTTP đã điền form tải của CIC (biến CIC_FORM)."""
-    import requests
-    s = requests.Session()
-    s.get(f"{BASE}/", timeout=60)
-    r = s.post(f"{BASE}/insert.php", data=json.loads(os.environ["CIC_FORM"]), timeout=60).json()
-    if not r.get("ok"):
-        raise RuntimeError(r)
-    return s
+class Session:
+    """Tải bằng curl với cookie của form CIC (biến CIC_FORM). Thư viện requests bị server ngắt kết nối giữa chừng."""
+
+    def __init__(self, jar):
+        self.jar = jar
+        subprocess.run(["curl", "-s", "-c", jar, "-b", jar, f"{BASE}/", "-o", os.devnull], check=True)
+        form = sum((["-F", f"{k}={v}"] for k, v in json.loads(os.environ["CIC_FORM"]).items()), [])
+        r = json.loads(subprocess.run(["curl", "-s", "-c", jar, "-b", jar, "-X", "POST", f"{BASE}/insert.php", *form],
+                                      check=True, capture_output=True).stdout)
+        if not r.get("ok"):
+            raise RuntimeError(r)
+
+    def url(self, path):
+        return f"{BASE}/download.php?file=" + path.replace("/", "%2F")
+
+    def get(self, path):
+        return subprocess.run(["curl", "-s", "-b", self.jar, self.url(path)], check=True, capture_output=True).stdout
+
+    def stream(self, path):
+        return subprocess.Popen(["curl", "-s", "-b", self.jar, self.url(path)], stdout=subprocess.PIPE)
 
 
 def inventory(sess):
     """devices.csv và attacks.csv trong thư mục docs chính thức của bộ dữ liệu."""
-    get = lambda name: pd.read_csv(io.BytesIO(sess.get(f"{BASE}/download.php?file=docs%2Fsite%2F{name}",
-                                                       timeout=120).content))
+    get = lambda name: pd.read_csv(io.BytesIO(sess.get(f"docs/site/{name}")))
     devices, attacks = get("devices.csv"), get("attacks.csv")
     devices["mac"] = devices["mac"].str.lower()
     # Một tệp có thể có nhiều dòng (mỗi máy tấn công một dòng): gộp thành cửa sổ rộng nhất.
@@ -149,22 +160,26 @@ def process(job):
     return pd.concat(parts), counts
 
 
-def members(sess, cat):
-    """Lần lượt từng PCAP trong tệp nén của một nhóm, đọc thẳng từ mạng, không lưu tệp nén."""
+def members(sess, cat, minutes):
+    """Lần lượt từng PCAP trong tệp nén của một nhóm, đọc thẳng từ mạng, không lưu tệp nén. Dừng sau `minutes` phút."""
     sub = "benign_data/benign" if cat == "benign" else f"attack_data/{cat}"
-    url = f"{BASE}/download.php?file=" + f"dataset/raw_files/{sub}.tar.xz".replace("/", "%2F")
-    r = sess.get(url, stream=True, timeout=600)
-    r.raise_for_status()
-    r.raw.decode_content = True
-    with tarfile.open(fileobj=r.raw, mode="r|xz") as tar:
-        for m in tar:
-            if m.isfile() and m.name.endswith(".pcap"):
-                yield os.path.basename(m.name)[:-5], tar.extractfile(m)
+    proc = sess.stream(f"dataset/raw_files/{sub}.tar.xz")
+    t_end = time.time() + 60 * minutes
+    try:
+        with tarfile.open(fileobj=proc.stdout, mode="r|xz") as tar:
+            for m in tar:
+                if m.isfile() and m.name.endswith(".pcap"):
+                    yield os.path.basename(m.name)[:-5], tar.extractfile(m)
+                    if time.time() > t_end:
+                        print(cat, "hết thời gian, dừng đọc", flush=True)
+                        return
+    finally:
+        proc.kill()
 
 
-def run(out, cats, workers):
+def run(out, cats, workers, minutes):
     os.makedirs(out, exist_ok=True)
-    sess = session()
+    sess = Session(f"{out}/.cookies")
     devices, attacks = inventory(sess)
     devices.to_csv(f"{out}/devices.csv", index=False)
     attacks.to_csv(f"{out}/attacks.csv", index=False)
@@ -175,7 +190,7 @@ def run(out, cats, workers):
             continue
         flows, counts, futs = [], [], set()
         with ProcessPoolExecutor(workers) as pool:
-            for i, (name, fh) in enumerate(members(sess, cat)):
+            for i, (name, fh) in enumerate(members(sess, cat, minutes)):
                 if name not in meta.index:
                     print("không có trong attacks.csv:", name, flush=True)
                     continue
@@ -222,9 +237,10 @@ if __name__ == "__main__":
     ap.add_argument("--out", required=True)
     ap.add_argument("--cats", nargs="+", default=CATS)
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
+    ap.add_argument("--minutes", type=float, default=1e9, help="thời gian đọc tối đa mỗi nhóm")
     ap.add_argument("--build", action="store_true")
     a = ap.parse_args()
     if a.build:
         build(a.out)
     else:
-        run(a.out, a.cats, a.workers)
+        run(a.out, a.cats, a.workers, a.minutes)
