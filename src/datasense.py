@@ -97,7 +97,7 @@ def extract(pcap):
     cut = pcap + ".head.pcap"
     subprocess.run(["tcpdump", "-r", pcap, "-w", cut, "-c", str(MAX_PACKETS)], check=True,
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    df = NFStreamer(source=cut, statistical_analysis=True, splt_analysis=0, n_dissectors=0,
+    df = NFStreamer(source=cut, statistical_analysis=True, splt_analysis=0, n_dissections=0,
                     idle_timeout=120, active_timeout=1800, accounting_mode=1, n_meters=1).to_pandas()
     os.remove(cut)
     return df
