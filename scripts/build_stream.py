@@ -73,6 +73,8 @@ def main(a):
         "relabel": {"rules": RULES, "table": relabel_table(a.data)},
         "model": {
             "name": "HC-CLOSR", "heldout": a.heldout, "seed": a.seed, "trained": time.strftime("%d/%m/%Y"),
+            "split": "Theo tệp PCAP: flow cùng phiên không nằm ở cả train và test" if ds.get("group_col")
+                     else "Ngẫu nhiên theo flow",
             "classes": [str(c) for c in info["classes"]], "n_features": len(info["columns"]),
             "features": info["columns"], "metrics": info["metrics"],
             "threshold": {"quantile": 0.95, "value": round(float(st["thr"]["fam"]), 3),

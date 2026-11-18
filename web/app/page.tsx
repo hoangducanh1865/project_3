@@ -1,51 +1,106 @@
 "use client";
 
-import { Activity, CircleHelp, Database, FileSearch, ShieldCheck } from "lucide-react";
-import { useEffect, useState } from "react";
-import Batch from "./batch";
-import CardPage, { useCard } from "./card";
-import Live from "./live";
-import { startTour, TOUR_KEY } from "./tour";
+import { BookOpen, Database, LayoutDashboard, Network, ShieldAlert, ShieldCheck, UserCog } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { Ctx, Decision, Page } from "./ctx";
+import type { Card, Labels, Policy, Role, Sources } from "./lib";
+import { hm, planFor, useLive, useStatic, useStored } from "./lib";
+import Incidents from "./views/incidents";
+import LabelsView from "./views/labels";
+import Model from "./views/model";
+import NetworkView from "./views/network";
+import Overview from "./views/overview";
+import PolicyView from "./views/policy";
 
-export default function Page() {
-  const [tab, setTab] = useState<"live" | "batch" | "card">("live");
-  const { card, error } = useCard();
+const NAV: [Page, string, typeof LayoutDashboard][] = [
+  ["overview", "Tổng quan", LayoutDashboard], ["incidents", "Sự cố", ShieldAlert], ["network", "Mạng và nguồn dữ liệu", Network],
+  ["labels", "Nhãn và tri thức", BookOpen], ["policy", "Phân quyền và cấu hình", UserCog], ["model", "Dữ liệu và mô hình", Database],
+];
 
-  useEffect(() => {        // tự mở hướng dẫn một lần cho người mới, chờ dữ liệu đầu tiên về
-    if (localStorage.getItem(TOUR_KEY)) return;
-    const begun = Date.now();
-    const id = setInterval(() => {
-      const ready = document.querySelector('[data-tour="incidents"] tbody tr, [data-tour="stats"] strong');
-      if (ready || Date.now() - begun > 8000) { clearInterval(id); startTour(setTab); }
-    }, 300);
-    return () => clearInterval(id);
+export default function App() {
+  const [page, setPage] = useState<Page>("overview");
+  const [selected, setSelected] = useState<string | null>(null);
+  const { live, error } = useLive();
+  const labels = useStatic<Labels>("labels").data;
+  const policy = useStatic<Policy>("policy").data;
+  const sources = useStatic<Sources>("sources").data;
+  const card = useStatic<Card>("card").data;
+  const [role, setRole] = useStored<Role>("vai-tro", "analyst");
+  const [decisions, setDecisions] = useStored<Record<string, Decision>>("quyet-dinh", {});
+  const [now, setNow] = useState(() => Date.now() / 1000);
+
+  useEffect(() => {
+    const read = () => { const h = location.hash.slice(1) as Page; if (NAV.some(([k]) => k === h)) setPage(h); };
+    read(); window.addEventListener("hashchange", read);
+    const id = setInterval(() => setNow(Date.now() / 1000), 15000);
+    return () => { window.removeEventListener("hashchange", read); clearInterval(id); };
   }, []);
 
+  const devices = useMemo(() => sources?.devices ?? card?.devices ?? [], [sources, card]);
+  const byIp = useMemo(() => Object.fromEntries(devices.map((d) => [d.ip, d])), [devices]);
+  const ctx: Ctx = {
+    incidents: live?.incidents ?? [], labels, policy, sources, card, role, decisions, selected, setSelected, now,
+    decide: (id, d) => {
+      const next = { ...decisions };
+      if (d) next[id] = { decision: d, by: role, at: Date.now() / 1000 }; else delete next[id];
+      setDecisions(next);
+    },
+    roleOf: (ip) => byIp[ip]?.role,
+    nameOf: (ip) => byIp[ip]?.device_name ?? "ngoài danh mục",
+    famName: (f) => labels?.families[f]?.name ?? f,
+    stateOf: (i) => {
+      const d = decisions[i.id];
+      if (d) return { text: `${d.decision === "approved" ? "Đã duyệt" : "Đã từ chối"} lúc ${hm(d.at)}`, pending: false, by: policy?.roles[d.by].name };
+      if (!policy) return { text: "", pending: false };
+      const pl = planFor(policy, i.level, byIp[i.dst]?.role);
+      if (!pl.approverRole) return { text: "Hệ thống tự xử lý", pending: false };
+      if (i.status === "closed") return { text: "Đã đóng, không ai duyệt", pending: false };
+      if (pl.ai === "act_on_timeout" && now - i.opened > policy.ai.timeout_min * 60)
+        return { text: `AI đã ${pl.actionName.toLowerCase()} ${pl.ttl} phút (hết giờ chờ)`, pending: false, by: "Trợ lý AI" };
+      return { text: `Chờ ${pl.approver} duyệt`, pending: true };
+    },
+    go: (p, inc) => { setPage(p); location.hash = p; if (inc) setSelected(inc); },
+  };
+  const pending = ctx.incidents.filter((i) => ctx.stateOf(i).pending).length;
+  const stale = live ? now - live.updated > 180 : false;
+
   return (
-    <>
-      <header className="appbar">
-        <div className="brand">
-          <span className="mark"><ShieldCheck size={18} aria-hidden="true" /></span>
-          <strong>Giám sát xâm nhập mạng</strong>
-        </div>
-        <nav aria-label="Chức năng">
-          <button aria-current={tab === "live" ? "page" : undefined} onClick={() => setTab("live")}>
-            <Activity size={15} aria-hidden="true" />Giám sát trực tiếp
-          </button>
-          <button aria-current={tab === "batch" ? "page" : undefined} onClick={() => setTab("batch")}>
-            <FileSearch size={15} aria-hidden="true" />Phân tích file
-          </button>
-          <button aria-current={tab === "card" ? "page" : undefined} onClick={() => setTab("card")}>
-            <Database size={15} aria-hidden="true" />Dữ liệu và mô hình
-          </button>
+    <div className="app">
+      <aside className="side">
+        <div className="brand"><span className="mark"><ShieldCheck size={18} aria-hidden="true" /></span>
+          <div><strong>IIoT SOC</strong><small>HC-CLOSR · DataSense 2025</small></div></div>
+        <nav aria-label="Trang">
+          {NAV.map(([k, label, Icon]) => (
+            <a key={k} href={`#${k}`} aria-current={page === k ? "page" : undefined} onClick={() => setPage(k)}>
+              <Icon size={16} aria-hidden="true" /><span>{label}</span>
+              {k === "incidents" && pending > 0 && <b>{pending}</b>}
+            </a>
+          ))}
         </nav>
-        <button className="ghost" data-tour="help" onClick={() => startTour(setTab)}>
-          <CircleHelp size={15} aria-hidden="true" />Hướng dẫn
-        </button>
-      </header>
-      <div hidden={tab !== "live"}><Live devices={card?.devices ?? []} thr={card?.model?.threshold.value} /></div>
-      <div hidden={tab !== "batch"}><Batch /></div>
-      <div hidden={tab !== "card"}><CardPage card={card} error={error} /></div>
-    </>
+        <p className="side-note">Đồ án Project 3, HUST 20261. Luồng là phát lại có tính sẵn trên flow thật của DataSense; mọi hành động chỉ là mô phỏng.</p>
+      </aside>
+      <div className="main">
+        <header className="top">
+          <div className="status">
+            <span className={stale || error ? "dot off" : "dot"} aria-hidden="true" />
+            {error ? error : live ? `Đang phát lại · cập nhật ${hm(live.updated)}` : "Đang tải..."}
+          </div>
+          <label className="role">Vai trò
+            <select value={role} onChange={(e) => setRole(e.target.value as Role)}>
+              <option value="analyst">{policy?.roles.analyst.name ?? "Chuyên viên trực (L1)"}</option>
+              <option value="lead">{policy?.roles.lead.name ?? "Trưởng ca (L2)"}</option>
+            </select>
+          </label>
+        </header>
+        <main className="content">
+          {page === "overview" && <Overview ctx={ctx} live={live} />}
+          {page === "incidents" && <Incidents ctx={ctx} />}
+          {page === "network" && <NetworkView ctx={ctx} />}
+          {page === "labels" && <LabelsView ctx={ctx} />}
+          {page === "policy" && <PolicyView ctx={ctx} />}
+          {page === "model" && <Model card={card} />}
+        </main>
+      </div>
+    </div>
   );
 }
