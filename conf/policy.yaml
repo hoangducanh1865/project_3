@@ -1,0 +1,31 @@
+# Phân quyền ứng phó: ai được làm gì ở từng mức (src/policy.py). Quy tắc thiết kế của đề tài, cần đối chiếu chuyên gia.
+# Nguyên tắc: AI chỉ đề xuất; chỉ được tự thực hiện hành động nhẹ, có thời hạn, đảo ngược được, khi người không phản hồi.
+# Không vai trò tự động nào (hệ thống, AI) được làm hành động khó đảo ngược hoặc có thể làm sập dịch vụ.
+roles:
+  system:  {name: Hệ thống (luật cố định)}
+  ai:      {name: Trợ lý AI}
+  analyst: {name: Chuyên viên trực (L1)}
+  lead:    {name: Trưởng ca (L2)}
+
+# Mỗi mức: hành động, thời hạn tối đa (phút, null là không giới hạn), ai thực hiện, ai duyệt.
+levels:
+  M0: {action: monitor,    ttl: null, executor: system,  approver: null,    ai: suggest}
+  M1: {action: alert,      ttl: null, executor: system,  approver: null,    ai: suggest}
+  M2: {action: rate_limit, ttl: 30,   executor: analyst, approver: analyst, ai: act_on_timeout}
+  M3: {action: block_src,  ttl: 1440, executor: analyst, approver: analyst, ai: suggest}
+  M4: {action: isolate,    ttl: null, executor: lead,    approver: lead,    ai: suggest}
+
+actions:
+  monitor:    {name: Theo dõi, reversible: true, desc: "ghi log, tăng độ chi tiết giám sát"}
+  alert:      {name: Cảnh báo, reversible: true, desc: "gửi cảnh báo, đưa vào hàng đợi xác minh"}
+  rate_limit: {name: Giới hạn tốc độ, reversible: true, desc: "giới hạn kết nối mới từ nguồn, có thời hạn"}
+  block_src:  {name: Chặn nguồn, reversible: true, desc: "chặn IP nguồn có thời hạn, ngắt phiên"}
+  isolate:    {name: Cô lập, reversible: false, desc: "cách ly máy, thu hồi thông tin xác thực"}
+
+ai:
+  timeout_min: 3          # chờ người duyệt bao lâu trước khi AI được thực hiện hành động act_on_timeout
+  # AI không bao giờ được: cô lập máy, thu hồi thông tin xác thực, tắt dịch vụ, đổi cấu hình vĩnh viễn, chặn máy chủ
+  # hạ tầng (router, switch, máy chủ MQTT, edge) vì có thể làm sập cả mạng.
+  forbidden_actions: [isolate]
+  protected_roles: [router, switch, ap, mqtt-broker, edge, cloud]
+  must_cite: true         # mỗi đề xuất của AI phải dẫn tài liệu nhãn và biện pháp D3FEND đã truy xuất
