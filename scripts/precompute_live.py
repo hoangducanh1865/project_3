@@ -13,6 +13,7 @@ import torch
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from src.hc_detector import HCDetector  # noqa: E402
+from src.policy import plan  # noqa: E402
 from src.simulator import Simulator  # noqa: E402
 from src.stream import step  # noqa: E402
 
@@ -41,11 +42,25 @@ def main(a):
         if minute % 60 == 0:
             print(minute, len(every), flush=True)
     os.makedirs(a.out, exist_ok=True)
+    card = json.load(open(f"{a.art}/stream/card.json"))
+    role = {d["ip"]: d["role"] for d in card["devices"]}
+    for inc in every.values():     # ai thực hiện, ai duyệt, AI được làm đến đâu (conf/policy.yaml)
+        inc["policy"] = plan(inc["level"], role.get(inc["dst"]))
     out = {"minutes": a.minutes, "series": state["series"], "incidents": list(every.values()),
            "campaigns": state["campaigns"]}
     json.dump(out, open(f"{a.out}/timeline.json", "w"), ensure_ascii=False, default=float)
-    card = json.load(open(f"{a.art}/stream/card.json"))
     json.dump(card, open(f"{a.out}/card.json", "w"), ensure_ascii=False)
+    # danh mục nhãn (ATT&CK, D3FEND) kèm nhận định AI có dẫn nguồn, cho trang Nhãn và chi tiết sự cố
+    root = os.path.join(os.path.dirname(__file__), "..", "knowledge")
+    labels = json.load(open(f"{root}/labels/catalog.json"))
+    notes = json.load(open(f"{root}/ai_notes.json")) if os.path.exists(f"{root}/ai_notes.json") else {}
+    for fid, f in labels["families"].items():
+        f["ai"] = notes.get(fid)
+    labels["report"] = open(f"{root}/labels/report.md").read()
+    json.dump(labels, open(f"{a.out}/labels.json", "w"), ensure_ascii=False)
+    import yaml
+    json.dump(yaml.safe_load(open(os.path.join(root, "..", "conf", "policy.yaml"))), open(f"{a.out}/policy.json", "w"),
+              ensure_ascii=False)
     print("xong", len(every), "sự cố", os.path.getsize(f"{a.out}/timeline.json") // 1024, "KB")
 
 
