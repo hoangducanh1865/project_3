@@ -1,0 +1,168 @@
+# Danh mục nhãn DataSense: nguồn chuẩn cho mô hình (conf/dataset/datasense.yaml: tactics), web và tài liệu RAG.
+# Sửa ở đây rồi chạy: python scripts/check_labels.py  (đối chiếu ATT&CK, D3FEND bản mới nhất, sinh knowledge/labels/)
+# Ánh xạ sang ATT&CK do đề tài lập, chưa đối chiếu chuyên gia. `tactic` là nhóm chiến thuật mô hình học (đầu chiến thuật),
+# có thể khác chiến thuật ATT&CK của kỹ thuật; script kiểm tra sẽ ghi rõ chỗ lệch.
+dataset: DataSense CIC IIoT 2025 (Firouzi 2025)
+families:
+  benign:
+    name: Bình thường
+    tactic: benign
+    techniques: []
+    variants: [benign_whole-network3, lưu lượng nền trong tệp tấn công]
+    behavior: >-
+      Lưu lượng vận hành của mạng IIoT: cảm biến gửi bản tin MQTT lên máy chủ MQTT (cổng 1883), máy chủ MQTT
+      đẩy dữ liệu lên đám mây, camera truyền hình ảnh, router và điểm truy cập gửi bản tin quản trị, DNS, NTP, mDNS.
+    labeling: Tệp benign không chạm máy tấn công; hoặc flow trong tệp tấn công không chạm IP, MAC máy tấn công.
+  host_discovery:
+    name: Dò tìm thiết bị
+    tactic: discovery
+    techniques: [T1018]
+    variants: [host-disc-tcp-ack-ping, host-disc-tcp-syn-ping, host-disc-tcp-syn-stealth, host-disc-udp-ping, ping-sweep]
+    behavior: >-
+      Máy tấn công gửi gói thăm dò (TCP SYN, TCP ACK, UDP, ICMP echo) tới nhiều địa chỉ trong dải mạng để biết máy
+      nào đang bật. Mỗi flow rất ngắn, 1 đến 2 gói, ít hoặc không có dữ liệu.
+    labeling: Chạm máy tấn công trong khung thời gian của lần tấn công; không cần đầu kia là mục tiêu (quét rộng).
+    note: host-disc-arp-ping chỉ có gói ARP, không tạo flow IP nên bị bỏ.
+  port_scan:
+    name: Quét cổng
+    tactic: discovery
+    techniques: [T1046]
+    variants: [port-scan]
+    behavior: >-
+      Máy tấn công thử kết nối tới nhiều cổng của một máy để tìm dịch vụ đang mở. Nhiều flow ngắn tới các cổng đích
+      khác nhau, phần lớn bị RST.
+    labeling: Chạm máy tấn công trong khung thời gian; quét rộng.
+  os_scan:
+    name: Dò hệ điều hành
+    tactic: discovery
+    techniques: [T1046]
+    variants: [os-scan]
+    behavior: >-
+      Gửi các gói TCP, UDP, ICMP có cờ và tuỳ chọn bất thường rồi so phản hồi để đoán hệ điều hành (kiểu nmap -O).
+    labeling: Chạm máy tấn công trong khung thời gian; quét rộng.
+    note: ATT&CK Enterprise không có kỹ thuật riêng cho dò hệ điều hành từ xa; T1046 là gần nhất.
+  vuln_scan:
+    name: Quét lỗ hổng
+    tactic: discovery
+    techniques: [T1595.002]
+    variants: [vuln-scan]
+    behavior: >-
+      Công cụ quét lỗ hổng gửi các yêu cầu tới dịch vụ đang mở để so với chữ ký lỗ hổng đã biết; flow dài hơn quét cổng,
+      có dữ liệu ứng dụng.
+    labeling: Chạm máy tấn công trong khung thời gian; quét rộng.
+  ssh_bruteforce:
+    name: Dò mật khẩu SSH
+    tactic: credential_access
+    techniques: [T1110.001]
+    variants: [dictionary-ssh]
+    behavior: >-
+      Thử lần lượt các cặp tên đăng nhập, mật khẩu từ từ điển vào dịch vụ SSH (cổng 22). Nhiều phiên TCP lặp lại tới
+      cùng một cổng, kích thước và thời lượng gần giống nhau.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  telnet_bruteforce:
+    name: Dò mật khẩu Telnet
+    tactic: credential_access
+    techniques: [T1110.001]
+    variants: [dictionary-telnet]
+    behavior: Như dò mật khẩu SSH nhưng vào Telnet (cổng 23), giao thức không mã hoá thường gặp trên thiết bị IoT.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  web_attack:
+    name: Tấn công web
+    tactic: initial_access
+    techniques: [T1190]
+    variants: [sql-injection, sql-injection-blind, xss, command-injection, backdoor-upload]
+    behavior: >-
+      Gửi yêu cầu HTTP chứa chuỗi khai thác (SQL injection, XSS, chèn lệnh, tải lên web shell) tới ứng dụng web của
+      máy edge. Mô hình chỉ thấy số đo của flow, không thấy nội dung yêu cầu.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+    note: backdoor-upload gần T1505.003 (Web Shell, Persistence) hơn; gom vào web_attack vì chỉ có 1 tệp.
+  arp_spoofing:
+    name: Đầu độc ARP
+    tactic: credential_access
+    techniques: [T1557.002]
+    variants: [arp-spoofing]
+    behavior: >-
+      Máy tấn công gửi bản tin ARP giả để đứng giữa hai thiết bị (ví dụ cảm biến và máy chủ MQTT). Trên flow IP chỉ thấy
+      phần lưu lượng mà máy tấn công trực tiếp gửi hoặc nhận; bản thân gói ARP không tạo flow IP.
+    labeling: Chạm IP hoặc MAC máy tấn công trong khung thời gian; nhận flow tới mọi máy (MITM).
+  impersonation:
+    name: Giả mạo thiết bị
+    tactic: credential_access
+    techniques: [T1557]
+    variants: [impersonation]
+    behavior: Máy tấn công giả danh một cảm biến để gửi bản tin MQTT giả tới máy chủ MQTT.
+    labeling: Chạm máy tấn công trong khung thời gian; nhận flow tới mọi máy (đầu kia là máy chủ MQTT, không phải mục tiêu).
+    note: ATT&CK Enterprise không có kỹ thuật khớp; ATT&CK for ICS có T0856 (Spoof Reporting Message) sát hơn.
+  ip_spoofing:
+    name: Giả mạo IP nguồn
+    tactic: credential_access
+    techniques: [T1498.001]
+    variants: [ip-spoofing]
+    behavior: >-
+      Gửi dồn dập gói có IP nguồn của thiết bị khác (ví dụ camera) tới router. Trong dữ liệu, mỗi lần tấn công thường
+      chỉ là một flow rất lớn (hàng triệu gói cùng 5-tuple).
+    labeling: Flow tới mục tiêu trong khung thời gian, MAC là máy tấn công hoặc IP nguồn lạ.
+    note: Bộ dữ liệu xếp vào nhóm MITM; hành vi thực tế gần ngập lụt. Chỉ có 45 flow, kết quả không ổn định.
+  mirai:
+    name: Mirai
+    tactic: impact
+    techniques: [T1498]
+    variants: [mirai-syn-flood, mirai-udp-flood]
+    behavior: Thiết bị IoT bị nhiễm Mirai cùng làm ngập SYN hoặc UDP vào máy edge và máy chủ MQTT.
+    labeling: Chạm máy tấn công trong khung thời gian; nhận flow tới mọi máy (lây lan).
+  syn_flood:
+    name: Ngập SYN
+    tactic: impact
+    techniques: [T1499.001]
+    variants: [syn-flood-port-80, syn-flood-port-1883, syn-flood-port-22, syn-flood-port-23, syn-flood-port-443, syn-flood-port-554]
+    behavior: Gửi dồn dập gói TCP SYN không hoàn tất bắt tay để làm đầy bảng kết nối của mục tiêu.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  land_flood:
+    name: Land flood
+    tactic: impact
+    techniques: [T1499.001]
+    variants: [synonymousip-flood-port-80, synonymousip-flood-port-1883]
+    behavior: Gói SYN có IP nguồn trùng IP đích, khiến mục tiêu tự trả lời chính nó.
+    labeling: Flow tới mục tiêu có IP nguồn trùng IP đích hoặc lạ, trong khung thời gian.
+  tcp_flood:
+    name: Ngập TCP
+    tactic: impact
+    techniques: [T1499.001]
+    variants: [ack-frag-flood, push-ack-flood, rst-fin-flood, tcp-flood, connect-flood]
+    behavior: Gửi dồn dập gói TCP với các tổ hợp cờ ACK, PSH, RST, FIN hoặc mở kết nối đầy đủ liên tục.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  udp_flood:
+    name: Ngập UDP
+    tactic: impact
+    techniques: [T1498.001]
+    variants: [udp-flood, udp-frag-flood]
+    behavior: Gửi dồn dập gói UDP (có thể phân mảnh) làm nghẽn băng thông của mục tiêu.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  icmp_flood:
+    name: Ngập ICMP
+    tactic: impact
+    techniques: [T1498.001]
+    variants: [icmp-flood, icmp-frag-flood]
+    behavior: Gửi dồn dập gói ICMP echo (có thể phân mảnh).
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  http_flood:
+    name: Ngập HTTP
+    tactic: impact
+    techniques: [T1499.002]
+    variants: [http-flood-port-80, http-flood-port-1883, http-flood-port-443, http-flood-port-554, http-flood-port-6668, http-flood-port-9595]
+    behavior: Gửi dồn dập yêu cầu HTTP hợp lệ để làm cạn tài nguyên của dịch vụ web.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  mqtt_flood:
+    name: Ngập MQTT
+    tactic: impact
+    techniques: [T1499.002]
+    variants: [mqtt-publish-flood]
+    behavior: Gửi dồn dập bản tin MQTT publish tới máy chủ MQTT.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
+  slowloris:
+    name: Slowloris
+    tactic: impact
+    techniques: [T1499.002]
+    variants: [slowloris-port-80, slowloris-port-1883, slowloris-port-554, slowloris-port-8000]
+    behavior: Mở nhiều kết nối và gửi phần đầu yêu cầu rất chậm để giữ kết nối, làm cạn số kết nối của dịch vụ.
+    labeling: Chạm máy tấn công, trong khung thời gian, đầu kia là mục tiêu.
