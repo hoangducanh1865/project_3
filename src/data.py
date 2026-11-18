@@ -41,6 +41,7 @@ def load_csv(ds):
         return z["X"], z["y"]
     df = _read_table(ds)
     y = df.pop(ds.label_col).astype(str).to_numpy().astype(str)  # chuỗi độ dài cố định, lưu được vào npz
+    groups = _groups(df, ds)
     df = df.drop(columns=list(ds.drop_cols), errors="ignore").select_dtypes("number")
     cols = df.columns.to_numpy().astype(str)
     X = df.to_numpy(dtype=np.float32)
@@ -50,8 +51,62 @@ def load_csv(ds):
     X, y = X[ok], y[ok]
     keep = X.std(axis=0) > 0  # bỏ cột hằng
     X = X[:, keep]
-    np.savez(ds.cache, X=X, y=y, cols=cols[keep], rows=np.flatnonzero(ok))
+    extra = {"groups": groups[ok]} if groups is not None else {}
+    np.savez(ds.cache, X=X, y=y, cols=cols[keep], rows=np.flatnonzero(ok), **extra)
     return X, y
+
+
+def _groups(df, ds):
+    """Phiên thu của từng flow (tên tệp PCAP) để tách train/test theo phiên, tránh rò rỉ giữa các flow cùng phiên.
+
+    Tệp chỉ chứa lưu lượng bình thường (tiền tố ds.group_split_prefix) là một phiên rất dài: cắt thành các cửa sổ
+    ds.group_window_ms, mỗi cửa sổ là một phiên.
+    """
+    col = ds.get("group_col")
+    if not col:
+        return None
+    g = df[col].astype(str).to_numpy()
+    prefix, win = ds.get("group_split_prefix"), ds.get("group_window_ms")
+    if prefix and win:
+        long_ = np.char.startswith(g.astype(str), prefix)
+        w = (df[ds.group_time_col].to_numpy() // win).astype(np.int64).astype(str)
+        g = np.where(long_, np.char.add(np.char.add(g.astype(str), "#"), w), g)
+    return g.astype(str)
+
+
+def load_groups(ds):
+    """Phiên thu của từng dòng X, hoặc None nếu bộ dữ liệu không khai báo group_col."""
+    if not ds.get("group_col"):
+        return None
+    z = np.load(ds.cache, allow_pickle=False)
+    return z["groups"] if "groups" in z.files else None
+
+
+def _session_assign(groups, y, rng, frac_te=0.5, frac_va=0.1):
+    """Giao trọn mỗi phiên cho train (0), val (1) hoặc test (2), chia riêng trong từng họ.
+
+    Họ của một phiên là nhãn tấn công chiếm đa số trong phiên, phiên toàn bình thường là "benign". Họ chỉ có một
+    phiên thì toàn bộ vào train; từ 3 phiên trở lên mới có phiên val.
+    """
+    df = pd.DataFrame({"g": groups, "y": y})
+    att = df[df.y != _benign_label(y)]
+    fam = att.groupby("g").y.agg(lambda s: s.value_counts().index[0])
+    fam = fam.reindex(df.g.unique()).fillna("benign")
+    split = {}
+    for _, gs in fam.groupby(fam):
+        gs = rng.permutation(gs.index.to_numpy())
+        n = len(gs)
+        n_te = n // 2 if n >= 2 else 0
+        n_va = max(1, int(round(frac_va * n))) if n >= 3 else 0
+        split.update({g: 2 for g in gs[:n_te]})
+        split.update({g: 1 for g in gs[n_te:n_te + n_va]})
+        split.update({g: 0 for g in gs[n_te + n_va:]})
+    return np.array([split[g] for g in groups], dtype=np.int8)
+
+
+def _benign_label(y):
+    names = np.unique(y)
+    return next((n for n in names if _norm(n) == "benign"), names[0])
 
 
 def load_columns(ds):
@@ -69,6 +124,7 @@ def make_split(X, y, ds, proto, eval_cap, seed):
     """Tách known-train/val/test và tập OOD. Lớp 0 luôn là lưu lượng bình thường.
 
     Có proto.heldout: OOD là họ tấn công đó, các lớp hiếm bị bỏ. Không có: OOD là các lớp hiếm.
+    Bộ dữ liệu có ds.group_col: known được tách theo phiên PCAP (_session_assign), không theo flow.
     """
     rng = np.random.default_rng(seed)
     names, inv = np.unique(y, return_inverse=True)
@@ -92,8 +148,15 @@ def make_split(X, y, ds, proto, eval_cap, seed):
     remap[known] = np.arange(len(known))
     yk = remap[inv]
     tr, va, te = [], [], []
+    groups = load_groups(ds) if ds.get("group_col") else None
+    side = _session_assign(groups, y, rng) if groups is not None else None
     for k in range(len(known)):
         idx = rng.permutation(np.flatnonzero(yk == k))
+        if side is not None:     # tách theo phiên PCAP: flow cùng phiên không nằm ở cả train và test
+            te.append(idx[side[idx] == 2])
+            va.append(idx[side[idx] == 1])
+            tr.append(idx[side[idx] == 0][: ds.max_per_class])
+            continue
         n_te = len(idx) // 2
         n_va = max(1, int(0.05 * len(idx)))
         te.append(idx[:n_te])
