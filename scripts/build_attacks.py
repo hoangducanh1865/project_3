@@ -30,7 +30,7 @@ def common(values):
     return Counter(map(str, values)).most_common(1)[0][0]
 
 
-def build_one(det, sim, pool, fam, rng):
+def build_one(det, sim, pool, fam, rng, attackers):
     y, files = pool["y"], pool["pcap"]
     a = np.flatnonzero(y == fam)
     if len(a) < 10:
@@ -38,7 +38,12 @@ def build_one(det, sim, pool, fam, rng):
     file = common(files[a])                       # tệp PCAP có nhiều flow họ này nhất
     rows = a[files[a] == file]
     rows = rows[rng.permutation(len(rows))[:CAP_ATTACK]]
-    src_ip, dst_ip = common(pool["src_ip"][rows]), common(pool["dst_ip"][rows])
+    # flow hai chiều: chọn đầu là máy tấn công làm nguồn, đầu kia làm đích, để sơ đồ mạng vẽ từ máy tấn công tới mục
+    # tiêu. Mô hình không dùng IP nên việc chọn hướng này chỉ ảnh hưởng hiển thị. Họ giả mạo IP: nguồn là IP giả.
+    sips, dips = pool["src_ip"][rows], pool["dst_ip"][rows]
+    atk = [s if s in attackers else (d if d in attackers else s) for s, d in zip(sips, dips)]
+    tgt = [d if (s in attackers and d not in attackers) else (s if d in attackers else d) for s, d in zip(sips, dips)]
+    src_ip, dst_ip = common(atk), common(tgt)
     ben = np.flatnonzero(y == "benign")
     ben = ben[files[ben] == file]
     ben = ben[rng.permutation(len(ben))[:int(len(rows) * BENIGN_FRAC)]]
@@ -66,10 +71,12 @@ def main(a):
     pool = np.load(f"{a.art}/stream/pool.npz", allow_pickle=False)
     sim = Simulator(pool, [])
     rng = np.random.default_rng(0)
+    card0 = json.load(open(f"{a.art}/stream/card.json"))
+    attackers = {d["ip"] for d in card0["devices"] if d["role"] == "attacker"}
     fams = sorted(set(map(str, pool["y"])) - {"benign"})
     out, skipped = [], []
     for fam in fams:
-        sc, why = build_one(det, sim, pool, fam, rng)
+        sc, why = build_one(det, sim, pool, fam, rng, attackers)
         if sc:
             out.append(sc)
             print(f"{fam}: tầng {sc['incident']['tier']} mức {sc['incident']['level']} "

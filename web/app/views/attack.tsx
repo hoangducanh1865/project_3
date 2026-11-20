@@ -64,7 +64,8 @@ export default function AttackConsole({ ctx }: { ctx: Ctx }) {
               <select value={target} onChange={(e) => setDstIp(e.target.value)} aria-label="Máy mục tiêu">
                 {targets.map((d) => <option key={d.ip} value={d.ip}>{d.device_name} · {d.ip} ({d.role})</option>)}
               </select>
-              <small>Nguồn: máy tấn công {sc.src_ip} · tệp PCAP gốc {sc.file}</small>
+              <small>Nguồn: {ctx.roleOf(sc.src_ip) === "attacker" ? `máy tấn công ${sc.src_ip}`
+                : `${sc.src_ip} (IP giả mạo, họ này ẩn máy tấn công ở tầng IP)`} · tệp PCAP gốc {sc.file}</small>
             </div>
             <button className="primary big" onClick={() => ctx.launch(sc, target)}>
               <Crosshair size={16} aria-hidden="true" /> Phát động tấn công
