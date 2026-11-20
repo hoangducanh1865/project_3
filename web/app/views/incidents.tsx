@@ -49,7 +49,7 @@ export default function Incidents({ ctx }: { ctx: Ctx }) {
                       <td className="mono">{hm(i.opened)}</td>
                       <td><span className="mono">{i.src}</span><small>{ctx.nameOf(i.src)}</small></td>
                       <td><span className="mono">{i.dst}</span><small>{ctx.nameOf(i.dst)}</small></td>
-                      <td>{ctx.famName(i.family)}<small>Tầng {i.tier} · {TACTIC[i.tactic] ?? i.tactic}</small></td>
+                      <td>{ctx.famName(i.family)} {i.sim && <Chip tone="strong">diễn tập</Chip>}<small>Tầng {i.tier} · {TACTIC[i.tactic] ?? i.tactic}</small></td>
                       <td className="r mono">{i.alerts}/{i.flows}</td>
                       <td className={st.pending ? "wait" : "muted"}>{st.text}</td>
                     </tr>
@@ -82,8 +82,9 @@ function Detail({ ctx, inc }: { ctx: Ctx; inc: Incident }) {
   return (
     <>
       <Panel>
-        <div className="d-head"><LevelBadge level={inc.level} /><div><h3>{ctx.famName(inc.family)}</h3>
+        <div className="d-head"><LevelBadge level={inc.level} /><div><h3>{ctx.famName(inc.family)} {inc.sim && <Chip tone="strong">diễn tập</Chip>}</h3>
           <p>{TIER[inc.tier]} · {TACTIC[inc.tactic] ?? inc.tactic}</p></div></div>
+        {inc.sim && <p className="fine">Sự cố diễn tập: flow tấn công thật chưa dùng khi huấn luyện, điểm do HC-CLOSR chấm sẵn; bạn phát động từ trang Diễn tập tấn công.</p>}
         <KV rows={[
           ["Kết nối", <span key="k"><span className="mono">{inc.src}</span> {ctx.nameOf(inc.src)} → <span className="mono">{inc.dst}</span> {ctx.nameOf(inc.dst)}</span>],
           ["Thời gian", `${hm(inc.opened)} đến ${hm(inc.last)}${inc.status === "closed" ? ", đã đóng" : ""}`],

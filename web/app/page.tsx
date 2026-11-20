@@ -1,10 +1,11 @@
 "use client";
 
-import { BookOpen, Database, LayoutDashboard, Network, ShieldAlert, ShieldCheck, UserCog } from "lucide-react";
+import { BookOpen, Crosshair, Database, LayoutDashboard, Network, ShieldAlert, ShieldCheck, UserCog } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { Ctx, Decision, Page } from "./ctx";
-import type { Card, Labels, Policy, Role, Sources } from "./lib";
+import type { Attacks, AttackScenario, Card, Incident, Labels, Live, Policy, Role, Sources } from "./lib";
 import { hm, planFor, useLive, useStatic, useStored } from "./lib";
+import AttackConsole from "./views/attack";
 import Incidents from "./views/incidents";
 import LabelsView from "./views/labels";
 import Model from "./views/model";
@@ -14,6 +15,7 @@ import PolicyView from "./views/policy";
 
 const NAV: [Page, string, typeof LayoutDashboard][] = [
   ["overview", "Tổng quan", LayoutDashboard], ["incidents", "Sự cố", ShieldAlert], ["network", "Mạng và nguồn dữ liệu", Network],
+  ["attack", "Diễn tập tấn công", Crosshair],
   ["labels", "Nhãn và tri thức", BookOpen], ["policy", "Phân quyền và cấu hình", UserCog], ["model", "Dữ liệu và mô hình", Database],
 ];
 
@@ -25,8 +27,10 @@ export default function App() {
   const policy = useStatic<Policy>("policy").data;
   const sources = useStatic<Sources>("sources").data;
   const card = useStatic<Card>("card").data;
+  const attacks = useStatic<Attacks>("attacks").data;
   const [role, setRole] = useStored<Role>("vai-tro", "analyst");
   const [decisions, setDecisions] = useStored<Record<string, Decision>>("quyet-dinh", {});
+  const [injected, setInjected] = useStored<Incident[]>("dien-tap", []);
   const [now, setNow] = useState(() => Date.now() / 1000);
 
   useEffect(() => {
@@ -38,13 +42,30 @@ export default function App() {
 
   const devices = useMemo(() => sources?.devices ?? card?.devices ?? [], [sources, card]);
   const byIp = useMemo(() => Object.fromEntries(devices.map((d) => [d.ip, d])), [devices]);
+  const incidents = useMemo(() => [...injected, ...(live?.incidents ?? [])], [injected, live]);
+  // Sự cố diễn tập do người dùng phát động được cộng vào luồng phát lại để hiện trên biểu đồ và sơ đồ mạng.
+  const livePlus: Live | null = useMemo(() => {
+    if (!live) return null;
+    if (!injected.length) return live;
+    const a = injected.reduce((n, i) => n + i.alerts, 0), f = injected.reduce((n, i) => n + i.flows, 0);
+    const series = live.series.map((p, k) => (k === live.series.length - 1 ? { ...p, flows: p.flows + f, alerts: p.alerts + a } : p));
+    return { ...live, series, summary: { ...live.summary, flows_60m: live.summary.flows_60m + f, alerts_60m: live.summary.alerts_60m + a } };
+  }, [live, injected]);
   const ctx: Ctx = {
-    incidents: live?.incidents ?? [], labels, policy, sources, card, role, decisions, selected, setSelected, now,
+    incidents, labels, policy, sources, card, attacks, role, decisions, selected, setSelected, now, simCount: injected.length,
     decide: (id, d) => {
       const next = { ...decisions };
       if (d) next[id] = { decision: d, by: role, at: Date.now() / 1000 }; else delete next[id];
       setDecisions(next);
     },
+    launch: (s, dstIp) => {
+      const t = Date.now() / 1000;
+      const inc: Incident = { ...s.incident, id: `sim-${Date.now()}`, src: s.src_ip, dst: dstIp, opened: t, last: t,
+        status: "open", campaign: null, sim: true };
+      setInjected([inc, ...injected].slice(0, 12));
+      setSelected(inc.id); setPage("incidents"); location.hash = "incidents";
+    },
+    clearSim: () => setInjected([]),
     roleOf: (ip) => byIp[ip]?.role,
     nameOf: (ip) => byIp[ip]?.device_name ?? "ngoài danh mục",
     famName: (f) => labels?.families[f]?.name ?? f,
@@ -93,9 +114,10 @@ export default function App() {
           </label>
         </header>
         <main className="content">
-          {page === "overview" && <Overview ctx={ctx} live={live} />}
+          {page === "overview" && <Overview ctx={ctx} live={livePlus} />}
           {page === "incidents" && <Incidents ctx={ctx} />}
           {page === "network" && <NetworkView ctx={ctx} />}
+          {page === "attack" && <AttackConsole ctx={ctx} />}
           {page === "labels" && <LabelsView ctx={ctx} />}
           {page === "policy" && <PolicyView ctx={ctx} />}
           {page === "model" && <Model card={card} />}

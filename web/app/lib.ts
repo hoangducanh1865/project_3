@@ -11,8 +11,13 @@ export type Incident = {
   id: string; src: string; dst: string; opened: number; last: number; flows: number; alerts: number;
   status: "open" | "closed"; truth: Record<string, number>; campaign: number | null; family: string;
   tier: number; tactic: string; L: number; I: number; R: number; level: Level; action: string; reversible: boolean;
-  mode: string; d3fend_now: string[]; d3fend_later: string[]; evidence?: Evidence[]; files?: string[];
+  mode: string; d3fend_now: string[]; d3fend_later: string[]; evidence?: Evidence[]; files?: string[]; sim?: boolean;
 };
+export type AttackScenario = {
+  family: string; known: boolean; file: string; src_ip: string; dst_ip: string;
+  incident: Omit<Incident, "id" | "src" | "dst" | "opened" | "last" | "status" | "campaign">;
+};
+export type Attacks = { generated: string; heldout: string; note: string; scenarios: AttackScenario[]; skipped: string[] };
 export type Level = "M0" | "M1" | "M2" | "M3" | "M4";
 export type Point = { t: number; flows: number; alerts: number };
 export type Summary = {
